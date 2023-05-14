@@ -10,5 +10,10 @@ import segment_anything
 
 with torch.no_grad():
     sam = segment_anything.sam_model_registry["vit_h"](checkpoint="build/sam_vit_h_4b8939.pth")
-    x = torch.rand(2,3,256,256)
-    print(sam(x).shape)
+    x = {}
+    x["image"] = torch.rand(3,256,256)
+    x["original_size"]=(256,256)
+    xx = {}
+    xx["image"] = torch.rand(3,256,256)
+    xx["original_size"]=(256,256)
+    print(sam([x,xx],False))
