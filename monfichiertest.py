@@ -8,5 +8,7 @@ if "build" not in os.listdir("."):
 
 import segment_anything
 
-sam = segment_anything.sam_model_registry["vit_h"](checkpoint="build/sam_vit_h_4b8939.pth")
-print(sam)
+with torch.no_grad():
+    sam = segment_anything.sam_model_registry["vit_h"](checkpoint="build/sam_vit_h_4b8939.pth")
+    x = torch.rand(2,3,256,256)
+    print(sam(x).shape)
