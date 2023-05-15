@@ -46,6 +46,7 @@ class Sam(nn.Module):
         self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
 
+    def hackinit(self):
         self.myhack = torch.nn.Linear(5*256,256)
         self.conv1hack = torch.nn.Conv2d(256,128,kernel_size=3,padding=1)
         self.conv2hack = torch.nn.Conv2d(128,128,kernel_size=1)
