@@ -3,7 +3,7 @@ import segment_anything
 import hack_dataloader
 
 print("load data")
-dataset = dataloader.CropExtractor(sys.argv[1])
+dataset = hack_dataloader.CropExtractor("/scratchf/miniworld/potsdam/test/")
 
 print("load model")
 with torch.no_grad():
@@ -20,7 +20,7 @@ def largeforward(net, image, tilesize=256, stride=128):
     image = image.cuda()
     for row in range(0, image.shape[2] - tilesize + 1, stride):
         for col in range(0, image.shape[3] - tilesize + 1, stride):
-            tmp = net(image[:, :, row : row + tilesize, col : col + tilesize])
+            tmp = net(image[:, :, row : row + tilesize, col : col + tilesize], False)
             pred[0, :, row : row + tilesize, col : col + tilesize] += tmp[0]
     return pred
 
@@ -45,7 +45,7 @@ with torch.no_grad():
 
         if True:
             nextI = len(os.listdir("build"))
-            debug = dataloader.torchTOpil(globalresize(x))
+            debug = hack_dataloader.torchTOpil(globalresize(x))
             debug = PIL.Image.fromarray(numpy.uint8(debug))
             debug.save("build/" + str(nextI) + "_x.png")
             debug = y * 255
@@ -56,4 +56,4 @@ with torch.no_grad():
             debug = PIL.Image.fromarray(numpy.uint8(debug))
             debug.save("build/" + str(nextI) + "_z.png")
 
-    print("perf=", dataloader.perf(cm))
+    print("perf=", hack_dataloader.perf(cm))

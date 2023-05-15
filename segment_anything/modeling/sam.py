@@ -101,6 +101,15 @@ class Sam(nn.Module):
                 shape BxCxHxW, where H=W=256. Can be passed as mask input
                 to subsequent iterations of prediction.
         """
+        if flagFinetuning:
+            tmp = []
+            for i in range(batched_input.shape[0]):
+                tmp_={}
+                tmp_["image"]=batched_input[i]
+                tmp_["original_size"] = (256, 256)
+                tmp.append(tmp_)
+            batched_input = tmp
+
         input_images = torch.stack([self.preprocess(x["image"]) for x in batched_input], dim=0)
         image_embeddings = self.image_encoder(input_images)
 

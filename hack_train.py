@@ -3,7 +3,7 @@ import segment_anything
 import hack_dataloader
 
 print("load data")
-dataset = dataloader.CropExtractor(sys.argv[1])
+dataset = hack_dataloader.CropExtractor("/scratchf/miniworld/potsdam/train/")
 
 print("define model")
 net = segment_anything.sam_model_registry["vit_b"](
@@ -40,7 +40,7 @@ dataset.start()
 for i in range(nbbatchs):
     x, y = dataset.getBatch()
     x, y = x.cuda(), y.cuda()
-    z = net(x)
+    z = net(x, False)
 
     celoss = criterion(z, y)
     dice = diceloss(z, y)
@@ -58,7 +58,7 @@ for i in range(nbbatchs):
 
         if i % 1000 == 999:
             torch.save(net, "build/model.pth")
-            perf = dataloader.perf(stats)
+            perf = hack_dataloader.perf(stats)
             print(i, "perf", perf)
             if perf[0] > 92:
                 print("training stops after reaching high training accuracy")
