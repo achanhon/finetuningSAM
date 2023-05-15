@@ -42,8 +42,8 @@ for i in range(nbbatchs):
     x, y = x.cuda(), y.cuda()
     z = net(x, False)
 
-    celoss = criterion(z, y)
-    dice = diceloss(z, y)
+    celoss = criterion(z, y.long())
+    dice = diceloss(y, z)
     loss = dice + 0.1 * celoss
 
     with torch.no_grad():
