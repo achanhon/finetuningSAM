@@ -1,17 +1,20 @@
 import torch
 import segment_anything
-import dataloader
+import hack_dataloader
 
 print("load data")
 dataset = dataloader.CropExtractor(sys.argv[1])
 
 print("define model")
-net = segment_anything.sam_model_registry["vit_b"](checkpoint="model/sam_vit_b_01ec64.pth"    )
+net = segment_anything.sam_model_registry["vit_b"](
+    checkpoint="model/sam_vit_b_01ec64.pth"
+)
 net.hackinit()
 net = net.cuda()
 net.eval()
 
 print("train")
+
 
 def diceloss(y, z):
     eps = 0.00001
@@ -25,6 +28,7 @@ def diceloss(y, z):
     iou = 0.5 * (iou0 + iou1)
 
     return 1 - iou
+
 
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=0.00001)
@@ -40,7 +44,7 @@ for i in range(nbbatchs):
 
     celoss = criterion(z, y)
     dice = diceloss(z, y)
-    loss = dice+0.1*celoss
+    loss = dice + 0.1 * celoss
 
     with torch.no_grad():
         printloss += loss.clone().detach()

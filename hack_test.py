@@ -1,37 +1,6 @@
-import os
-import sys
-import numpy
-import PIL
-from PIL import Image
 import torch
-import torch.backends.cudnn as cudnn
-
-if torch.cuda.is_available():
-    torch.cuda.empty_cache()
-    cudnn.benchmark = True
-else:
-    print("no cuda")
-    quit()
-
-whereIam = os.uname()[1]
-if whereIam == "ldtis706z":
-    sys.path.append("/home/achanhon/github/EfficientNet-PyTorch")
-    sys.path.append("/home/achanhon/github/pytorch-image-models")
-    sys.path.append("/home/achanhon/github/pretrained-models.pytorch")
-    sys.path.append("/home/achanhon/github/segmentation_models.pytorch")
-if whereIam == "wdtim719z":
-    sys.path.append("/home/optimom/github/EfficientNet-PyTorch")
-    sys.path.append("/home/optimom/github/pytorch-image-models")
-    sys.path.append("/home/optimom/github/pretrained-models.pytorch")
-    sys.path.append("/home/optimom/github/segmentation_models.pytorch")
-if whereIam in ["calculon", "astroboy", "flexo", "bender"]:
-    sys.path.append("/d/achanhon/github/EfficientNet-PyTorch")
-    sys.path.append("/d/achanhon/github/pytorch-image-models")
-    sys.path.append("/d/achanhon/github/pretrained-models.pytorch")
-    sys.path.append("/d/achanhon/github/segmentation_models.pytorch")
-
-import segmentation_models_pytorch as smp
-import dataloader
+import segment_anything
+import hack_dataloader
 
 print("load data")
 dataset = dataloader.CropExtractor(sys.argv[1])
@@ -46,7 +15,7 @@ with torch.no_grad():
 print("test")
 
 
-def largeforward(net, image, tilesize=128, stride=64):
+def largeforward(net, image, tilesize=256, stride=128):
     pred = torch.zeros(1, 2, image.shape[2], image.shape[3]).cuda()
     image = image.cuda()
     for row in range(0, image.shape[2] - tilesize + 1, stride):
@@ -63,9 +32,8 @@ with torch.no_grad():
         x, y = x.cuda(), y.cuda().float()
 
         h, w = y.shape[0], y.shape[1]
-        D = dataloader.distancetransform(y)
         globalresize = torch.nn.AdaptiveAvgPool2d((h, w))
-        power2resize = torch.nn.AdaptiveAvgPool2d(((h // 64) * 64, (w // 64) * 64))
+        power2resize = torch.nn.AdaptiveAvgPool2d(((h // 128) * 128, (w // 128) * 128))
         x = power2resize(x)
 
         z = largeforward(net, x.unsqueeze(0))
@@ -73,14 +41,14 @@ with torch.no_grad():
         z = (z[0, 1, :, :] > z[0, 0, :, :]).float()
 
         for a, b in [(0, 0), (0, 1), (1, 0), (1, 1)]:
-            cm[a][b] += torch.sum((z == a).float() * (y == b).float() * D)
+            cm[a][b] += torch.sum((z == a).float() * (y == b).float())
 
         if True:
             nextI = len(os.listdir("build"))
             debug = dataloader.torchTOpil(globalresize(x))
             debug = PIL.Image.fromarray(numpy.uint8(debug))
             debug.save("build/" + str(nextI) + "_x.png")
-            debug = (2.0 * y - 1) * D * 127 + 127
+            debug = y * 255
             debug = debug.cpu().numpy()
             debug = PIL.Image.fromarray(numpy.uint8(debug))
             debug.save("build/" + str(nextI) + "_y.png")
