@@ -46,6 +46,12 @@ class Sam(nn.Module):
         self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
 
+        self.myhack = torch.nn.Linear(5*256,256)
+        self.conv1hack = torch.nn.Conv2d(256,128,kernel_size=3,padding=1)
+        self.conv2hack = torch.nn.Conv2d(128,128,kernel_size=1)
+        self.conv3hack = torch.nn.Conv2d(512,128,kernel_size=1)
+        self.conv4hack = torch.nn.Conv2d(256,2,kernel_size=1)
+
     @property
     def device(self) -> Any:
         return self.pixel_mean.device
@@ -54,6 +60,7 @@ class Sam(nn.Module):
         self,
         batched_input: List[Dict[str, Any]],
         multimask_output: bool,
+        flagFinetuning=True
     ) -> List[Dict[str, torch.Tensor]]:
         """
         Predicts masks end-to-end from provided images and prompts.
@@ -114,6 +121,17 @@ class Sam(nn.Module):
                 dense_prompt_embeddings=dense_embeddings,
                 multimask_output=multimask_output,
             )
+            if flagFinetuning:
+                u,v = low_res_masks[0], iou_predictions[0]
+                v = v.transpose(0,1)
+                u = u.view(5*256)
+                u = torch.nn.functional.leaky_relu(self.myhack(u))
+                v = v.view(256,64,64)
+                u = u.view(256,1,1)
+                v = v+u
+                outputs.append(v)
+                continue
+
             masks = self.postprocess_masks(
                 low_res_masks,
                 input_size=image_record["image"].shape[-2:],
@@ -127,7 +145,23 @@ class Sam(nn.Module):
                     "low_res_logits": low_res_masks,
                 }
             )
-        return outputs
+        
+        if flagFinetuning:
+            out = torch.stack(outputs,dim=0)
+            assert out.shape==(len(batched_input),256,64,64)
+            
+            out = torch.nn.functional.leaky_relu(self.conv1hack(out))
+            out = torch.nn.functional.interpolate(out, size=(256, 256), mode="bilinear")
+            outbis = torch.nn.functional.leaky_relu(self.conv2hack(out))
+            outbis1 = torch.nn.functional.max_pool2d(outbis,kernel_size=3,stride=1,padding=1)
+            outbis2 = torch.nn.functional.avg_pool2d(outbis,kernel_size=3,stride=1,padding=1)
+            outbis3 = torch.nn.functional.relu(10*outbis-9*outbis1)
+            outbis = torch.cat([outbis,outbis1,outbis2,outbis3],dim=1)
+            outbis = torch.nn.functional.leaky_relu(self.conv3hack(outbis))
+            out = torch.cat([out,outbis],dim=1)
+            return self.conv4hack(out)
+        else:
+            return outputs
 
     def postprocess_masks(
         self,
