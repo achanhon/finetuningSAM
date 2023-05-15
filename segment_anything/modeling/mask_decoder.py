@@ -138,7 +138,6 @@ class MaskDecoder(nn.Module):
         mask_tokens_out = hs[:, 1 : (1 + self.num_mask_tokens), :]
         
         if flagFinetune:
-            print(hs.shape,src.shape)
             return hs,src
 
         # Upscale mask embeddings and predict masks using the mask tokens
