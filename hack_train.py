@@ -1,6 +1,7 @@
 import torch
 import segment_anything
 import hack_dataloader
+import os
 
 print("load data")
 dataset = hack_dataloader.CropExtractor("/scratchf/miniworld/potsdam/train/")

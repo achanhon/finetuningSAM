@@ -1,6 +1,10 @@
 import torch
 import segment_anything
 import hack_dataloader
+import os
+import PIL
+from PIL import Image
+import numpy
 
 print("load data")
 dataset = hack_dataloader.CropExtractor("/scratchf/miniworld/potsdam/test/")
