@@ -40,6 +40,7 @@ class Sam(nn.Module):
           pixel_std (list(float)): Std values for normalizing pixels in the input image.
         """
         super().__init__()
+        self.hackforfinetuning=False
         self.image_encoder = image_encoder
         self.prompt_encoder = prompt_encoder
         self.mask_decoder = mask_decoder
@@ -47,6 +48,8 @@ class Sam(nn.Module):
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
 
     def hackinit(self):
+        self.hackforfinetuning=True
+        self.mask_decoder.hackforfinetuning=True
         self.myhack = torch.nn.Linear(5*256,256)
         self.conv1hack = torch.nn.Conv2d(256,128,kernel_size=3,padding=1)
         self.conv2hack = torch.nn.Conv2d(128,128,kernel_size=1)
@@ -60,8 +63,7 @@ class Sam(nn.Module):
     def forward(
         self,
         batched_input: List[Dict[str, Any]],
-        multimask_output: bool,
-        flagFinetuning=True
+        multimask_output: bool
     ) -> List[Dict[str, torch.Tensor]]:
         """
         Predicts masks end-to-end from provided images and prompts.
@@ -101,7 +103,7 @@ class Sam(nn.Module):
                 shape BxCxHxW, where H=W=256. Can be passed as mask input
                 to subsequent iterations of prediction.
         """
-        if flagFinetuning:
+        if self.hackforfinetuning:
             tmp = []
             for i in range(batched_input.shape[0]):
                 tmp_={}
@@ -131,7 +133,7 @@ class Sam(nn.Module):
                 dense_prompt_embeddings=dense_embeddings,
                 multimask_output=multimask_output,
             )
-            if flagFinetuning:
+            if self.hackforfinetuning:
                 u,v = low_res_masks[0], iou_predictions[0]
                 v = v.transpose(0,1)
                 u = u.view(5*256)
@@ -156,7 +158,7 @@ class Sam(nn.Module):
                 }
             )
         
-        if flagFinetuning:
+        if self.hackforfinetuning:
             out = torch.stack(outputs,dim=0)
             assert out.shape==(len(batched_input),256,64,64)
             
