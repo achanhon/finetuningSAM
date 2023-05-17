@@ -60,15 +60,8 @@ def ajust_bounding_box(y, x, r, h, w):
         max_x = w - 1
         min_x = w - 1 - 2 * r
 
-    # Calculate the dimensions of the crop box
-    crop_h = max_y - min_y + 1
-    crop_w = max_x - min_x + 1
 
-    # Calculate the coordinates of the top-left corner of the crop box
-    crop_y = y - min_y - r
-    crop_x = x - min_x - r
-
-    return crop_y, crop_x
+    return min_y, min_x
 
 
 def compute_value_bounding_box(image, k):
@@ -102,8 +95,7 @@ def extract_bounding_box(image, sem_labels, ins_labels):
 
     # Calculate the size of the square bounding box
     r = max(xmax - xmin, ymax - ymin) // 2
-    if min(h, w) < 2 * r + 1:
-        return None
+    r = min(r,200)
 
     left, top = ajust_bounding_box(center_y, center_x, r, h, w)
 
