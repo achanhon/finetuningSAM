@@ -9,6 +9,12 @@ if False:
         y.save("build/" + str(i) + "_y.png")
 
 
+def target_transform(target):
+    return torchvision.transforms.functional.to_tensor(
+        target[0]
+    ), torchvision.transforms.functional.to_tensor(target[1])
+
+
 # Define the Cityscapes dataset
 cityscapes_dataset = torchvision.datasets.Cityscapes(
     root="/scratchf/Cityscapes/",
@@ -16,12 +22,12 @@ cityscapes_dataset = torchvision.datasets.Cityscapes(
     mode="fine",
     target_type=["semantic", "instance"],
     transform=torchvision.transforms.ToTensor(),
-    target_transform=torchvision.transforms.ToTensor(),
+    target_transform=target_transform,
 )
 
 # Create a DataLoader for efficient batched data loading
-batch_size = 32
-shuffle = True  # Set to True if you want to shuffle the data
+batch_size = 64
+shuffle = False  # Set to True if you want to shuffle the data
 num_workers = 4  # Number of subprocesses to use for data loading
 data_loader = torch.utils.data.DataLoader(
     cityscapes_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
@@ -32,7 +38,7 @@ data_loader = torch.utils.data.DataLoader(
 def extract_bounding_box(image, sem_labels, ins_labels):
     # Get the pixel coordinates of all pedestrian instances
     pedestrian_indices = torch.nonzero(
-        (sem_labels == 11) & (ins_labels > 0), as_tuple=False
+        (sem_labels == 7) & (ins_labels > 0), as_tuple=False
     )
 
     if len(pedestrian_indices) == 0:
@@ -71,8 +77,9 @@ def extract_bounding_box(image, sem_labels, ins_labels):
 
 
 # Iterate over the data loader to get batches of data
+I=0
 for batch in data_loader:
-    images, sem_labels, ins_labels = batch
+    images, (sem_labels, ins_labels) = batch
 
     # Iterate over each image in the batch
     for i in range(len(images)):
@@ -84,7 +91,7 @@ for batch in data_loader:
         if cropped_image is not None:
             # Resize the cropped image to 256x256 pixels
             resized_image = cropped_image.resize((256, 256))
-
-            resized_image.save("build/" + str(i) + ".png")
+            resized_image.save("build/" + str(I) + ".png")
+            I+=1
 
     quit()
