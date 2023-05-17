@@ -21,7 +21,7 @@ cityscapes_dataset = torchvision.datasets.Cityscapes(
     split="train",
     mode="fine",
     target_type=["semantic", "instance"],
-    transform=None,
+    transform=torchvision.transforms.ToTensor(),
     target_transform=target_transform,
 )
 
@@ -38,8 +38,9 @@ data_loader = torch.utils.data.DataLoader(
 def extract_bounding_box(image, sem_labels, ins_labels):
     # Get the pixel coordinates of all pedestrian instances
     pedestrian_indices = torch.nonzero(
-        #(sem_labels == 7) & 
-        (ins_labels > 0), as_tuple=False
+        # (sem_labels == 7) &
+        (ins_labels > 0),
+        as_tuple=False,
     )
 
     if len(pedestrian_indices) == 0:
@@ -78,7 +79,7 @@ def extract_bounding_box(image, sem_labels, ins_labels):
 
 
 # Iterate over the data loader to get batches of data
-I=0
+I = 0
 for batch in data_loader:
     images, (sem_labels, ins_labels) = batch
 
@@ -92,7 +93,7 @@ for batch in data_loader:
         if cropped_image is not None:
             # Resize the cropped image to 256x256 pixels
             resized_image = cropped_image.resize((256, 256))
-            resized_image.save("build/" + str(I) + ".png")
-            I+=1
+            torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
+            I += 1
 
     quit()
