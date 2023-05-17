@@ -10,9 +10,9 @@ if False:
 
 
 def target_transform(target):
-    return torchvision.transforms.functional.to_tensor(
-        target[0]
-    ), torchvision.transforms.functional.to_tensor(target[1])
+    return (torchvision.transforms.functional.to_tensor(target[0]) * 255).long(), (
+        torchvision.transforms.functional.to_tensor(target[1]) * 255
+    ).long()
 
 
 # Define the Cityscapes dataset
@@ -53,10 +53,19 @@ def ajust_bounding_box(y, x, r, h, w):
 def extract_bounding_box(image, sem_labels, ins_labels):
     _, h, w = image.shape
 
+    """
+    print((sem_labels == 1).float().sum())
+    print((sem_labels == 2).float().sum())
+    print((sem_labels == 3).float().sum())
+    print((sem_labels == 4).float().sum())
+    print((sem_labels == 5).float().sum())
+    print((sem_labels == 6).float().sum())
+    print((sem_labels == 7).float().sum())
+    """
+
     # Get the pixel coordinates of all pedestrian instances
     pedestrian_indices = torch.nonzero(
-        # (sem_labels == 7) &
-        (ins_labels > 0),
+        (sem_labels == 7) & (ins_labels > 0),
         as_tuple=False,
     )
 
@@ -79,17 +88,19 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     )
 
     # Calculate the center of the bounding box
-    center_x = (xmin + xmax) // 2
-    center_y = (ymin + ymax) // 2
+    center_x = (xmin + xmax) / 2
+    center_y = (ymin + ymax) / 2
 
     # Calculate the size of the square bounding box
-    r = max(xmax - xmin, ymax - ymin) // 2
+    r = max(xmax - xmin, ymax - ymin) / 2
     if min(h, w) < 2 * r + 1:
         return None
 
-    left, top, right, bottom = ajust_bounding_box(center_y, center_x, r, h, w)
+    left, top, right, bottom = ajust_bounding_box(
+        int(center_y), int(center_x), int(r), h, w
+    )
 
-    return image[top : bottom + 1, left : right + 1]
+    return image[:, top : bottom + 1, left : right + 1]
 
 
 # Iterate over the data loader to get batches of data
@@ -107,7 +118,7 @@ with torch.no_grad():
 
             if cropped_image is not None:
                 # Resize the cropped image to 256x256 pixels
-                resized_image = cropped_image.resize((256, 256))
+                resized_image = F.interpolate(cropped_image, size=(256,256), mode='bilinear')
                 torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
                 I += 1
 
