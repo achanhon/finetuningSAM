@@ -38,29 +38,37 @@ data_loader = torch.utils.data.DataLoader(
 
 
 def ajust_bounding_box(y, x, r, h, w):
-    # Calculate the minimum and maximum coordinates for the crop box
-    min_y = max(y - r, 0)
-    max_y = min(y + r, h - 1)
-    min_x = max(x - r, 0)
-    max_x = min(x + r, w - 1)
+    # Calculate the minimum and maximum y-coordinates for the crop box
+    if y - r >= 0 and y + r < h:
+        min_y = y - r
+        max_y = y + r
+    elif y - r < 0:
+        min_y = 0
+        max_y = 2 * r
+    else:
+        max_y = h - 1
+        min_y = h - 1 - 2 * r
+
+    # Calculate the minimum and maximum x-coordinates for the crop box
+    if x - r >= 0 and x + r < w:
+        min_x = x - r
+        max_x = x + r
+    elif x - r < 0:
+        min_x = 0
+        max_x = 2 * r
+    else:
+        max_x = w - 1
+        min_x = w - 1 - 2 * r
 
     # Calculate the dimensions of the crop box
     crop_h = max_y - min_y + 1
     crop_w = max_x - min_x + 1
 
-    # Adjust the crop box to ensure it remains 2r x 2r
-    crop_h_diff = max(0, crop_h - 2 * r)
-    crop_w_diff = max(0, crop_w - 2 * r)
-    min_y += crop_h_diff // 2
-    max_y -= crop_h_diff // 2
-    min_x += crop_w_diff // 2
-    max_x -= crop_w_diff // 2
-
     # Calculate the coordinates of the top-left corner of the crop box
     crop_y = y - min_y - r
     crop_x = x - min_x - r
 
-    return crop_y, crop_x, 2 * r, 2 * r
+    return crop_y, crop_x
 
 
 def compute_value_bounding_box(image, k):
@@ -97,7 +105,7 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     if min(h, w) < 2 * r + 1:
         return None
 
-    left, top, _, _ = ajust_bounding_box(center_y, center_x, r, h, w)
+    left, top = ajust_bounding_box(center_y, center_x, r, h, w)
 
     return image[:, top : top + 2 * r + 1, left : left + 2 * r + 1]
 
