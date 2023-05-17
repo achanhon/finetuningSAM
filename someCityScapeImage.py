@@ -66,7 +66,7 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     x = (xmin + xmax) // 2
     y = (ymin + ymax) // 2
     r = max(xmax - xmin, ymax - ymin) // 2
-    r = int(r*1.2)
+    r = int(r * 1.2)
     r = min(r, 200)
 
     y = min(max(r, y), h - r - 1) - r
