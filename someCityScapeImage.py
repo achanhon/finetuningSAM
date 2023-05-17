@@ -34,8 +34,25 @@ data_loader = torch.utils.data.DataLoader(
 )
 
 
+def ajust_bounding_box(y, x, r, h, w):
+    left = x - r
+    top = y - r
+    right = x + r
+    bottom = y + r
+
+    # Adjust bounding box if it exceeds image boundaries
+    left = max(left, 0)
+    top = max(top, 0)
+    right = min(right, w - 1)
+    bottom = min(bottom, h - 1)
+
+    return left, top, right, bottom
+
+
 # Define a function to extract the square bounding box
 def extract_bounding_box(image, sem_labels, ins_labels):
+    _, h, w = image.shape
+
     # Get the pixel coordinates of all pedestrian instances
     pedestrian_indices = torch.nonzero(
         # (sem_labels == 7) &
@@ -66,16 +83,13 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     center_y = (ymin + ymax) // 2
 
     # Calculate the size of the square bounding box
-    box_size = max(xmax - xmin, ymax - ymin)
-    half_box_size = box_size // 2
+    r = max(xmax - xmin, ymax - ymin) // 2
+    if min(h, w) < 2 * r + 1:
+        return None
 
-    # Calculate the coordinates of the square bounding box
-    left = center_x - half_box_size
-    upper = center_y - half_box_size
-    right = center_x + half_box_size
-    lower = center_y + half_box_size
+    left, top, right, bottom = ajust_bounding_box(center_y, center_x, r, h, w)
 
-    return image.crop((left, upper, right, lower))
+    return image[top : bottom + 1, left : right + 1]
 
 
 # Iterate over the data loader to get batches of data
