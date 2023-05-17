@@ -2,12 +2,12 @@ import torch
 import torchvision
 
 if False:
-    dataset = torchvision.datasets.Cityscapes("/scratchf/Cityscapes/")
+    dataset = torchvision.datasets.Cityscapes("/scratchf/Cityscapes/",target_type="semantic")
     for i in range(10):
         x, y = dataset[i]
         x.save("build/" + str(i) + "_x.png")
         y.save("build/" + str(i) + "_y.png")
-
+    quit()
 
 def target_transform(target):
     return (torchvision.transforms.functional.to_tensor(target[0]) * 255).long(), (
@@ -70,7 +70,7 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     _, h, w = image.shape
 
     # Get the pixel coordinates of all pedestrian instances
-    k = (ins_labels * (sem_labels == 7)).flatten().max()
+    k = (ins_labels * (sem_labels == 24)).flatten().max()
 
     if k == 0:
         return None  # No pedestrian instances found
@@ -110,8 +110,8 @@ with torch.no_grad():
             if cropped_image is not None:
                 # Resize the cropped image to 256x256 pixels
                 resized_image = torch.nn.functional.interpolate(
-                    cropped_image, size=(256, 256), mode="bilinear"
-                )
+                    cropped_image.unsqueeze(0), size=(256, 256), mode="bilinear"
+                )[0]
                 torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
                 I += 1
 
