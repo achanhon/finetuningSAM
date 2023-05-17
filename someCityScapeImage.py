@@ -11,7 +11,7 @@ if False:
 
 def target_transform(target):
     return (torchvision.transforms.functional.to_tensor(target[0]) * 255).long(), (
-        torchvision.transforms.functional.to_tensor(target[1]) * 255
+        torchvision.transforms.functional.to_tensor(target[1])
     ).long()
 
 
@@ -53,15 +53,10 @@ def ajust_bounding_box(y, x, r, h, w):
 def extract_bounding_box(image, sem_labels, ins_labels):
     _, h, w = image.shape
 
-    """
-    print((sem_labels == 1).float().sum())
-    print((sem_labels == 2).float().sum())
-    print((sem_labels == 3).float().sum())
-    print((sem_labels == 4).float().sum())
-    print((sem_labels == 5).float().sum())
-    print((sem_labels == 6).float().sum())
-    print((sem_labels == 7).float().sum())
-    """
+    
+    torchvision.utils.save_image((sem_labels/255).float(), "build/wtf.png")
+    torchvision.utils.save_image((ins_labels/255).float(), "build/ceu.png")
+    quit()
 
     # Get the pixel coordinates of all pedestrian instances
     pedestrian_indices = torch.nonzero(
