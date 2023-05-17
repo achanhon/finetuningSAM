@@ -2,12 +2,15 @@ import torch
 import torchvision
 
 if False:
-    dataset = torchvision.datasets.Cityscapes("/scratchf/Cityscapes/",target_type="semantic")
+    dataset = torchvision.datasets.Cityscapes(
+        "/scratchf/Cityscapes/", target_type="semantic"
+    )
     for i in range(10):
         x, y = dataset[i]
         x.save("build/" + str(i) + "_x.png")
         y.save("build/" + str(i) + "_y.png")
     quit()
+
 
 def target_transform(target):
     return (torchvision.transforms.functional.to_tensor(target[0]) * 255).long(), (
@@ -35,26 +38,33 @@ data_loader = torch.utils.data.DataLoader(
 
 
 def ajust_bounding_box(y, x, r, h, w):
-    left = x - r
-    top = y - r
-    right = x + r
-    bottom = y + r
+    # Calculate the minimum and maximum coordinates for the crop box
+    min_y = max(y - r, 0)
+    max_y = min(y + r, h - 1)
+    min_x = max(x - r, 0)
+    max_x = min(x + r, w - 1)
 
-    # Adjust bounding box if it exceeds image boundaries
-    left = max(left, 0)
-    top = max(top, 0)
-    right = min(right, w - 1)
-    bottom = min(bottom, h - 1)
+    # Calculate the dimensions of the crop box
+    crop_h = max_y - min_y + 1
+    crop_w = max_x - min_x + 1
 
-    return left, top, right, bottom
+    # Adjust the crop box to ensure it remains 2r x 2r
+    crop_h_diff = max(0, crop_h - 2 * r)
+    crop_w_diff = max(0, crop_w - 2 * r)
+    min_y += crop_h_diff // 2
+    max_y -= crop_h_diff // 2
+    min_x += crop_w_diff // 2
+    max_x -= crop_w_diff // 2
+
+    # Calculate the coordinates of the top-left corner of the crop box
+    crop_y = y - min_y - r
+    crop_x = x - min_x - r
+
+    return crop_y, crop_x, 2 * r, 2 * r
 
 
 def compute_value_bounding_box(image, k):
     k_indices = torch.where(image == k)
-
-    if len(k_indices[0]) == 0:
-        # The value was not found, return None
-        return None
 
     # Compute bounding box coordinates
     min_row = torch.min(k_indices[0])
@@ -62,7 +72,7 @@ def compute_value_bounding_box(image, k):
     max_row = torch.max(k_indices[0])
     max_col = torch.max(k_indices[1])
 
-    return min_row.item(), min_col.item(), max_row.item(), max_col.item()
+    return int(min_row), int(min_col), int(max_row), int(max_col)
 
 
 # Define a function to extract the square bounding box
@@ -79,19 +89,17 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     ymin, xmin, ymax, xmax = compute_value_bounding_box(ins_labels, k)
 
     # Calculate the center of the bounding box
-    center_x = (xmin + xmax) / 2
-    center_y = (ymin + ymax) / 2
+    center_x = (xmin + xmax) // 2
+    center_y = (ymin + ymax) // 2
 
     # Calculate the size of the square bounding box
-    r = max(xmax - xmin, ymax - ymin) / 2
+    r = max(xmax - xmin, ymax - ymin) // 2
     if min(h, w) < 2 * r + 1:
         return None
 
-    left, top, right, bottom = ajust_bounding_box(
-        int(center_y), int(center_x), int(r), h, w
-    )
+    left, top, _, _ = ajust_bounding_box(center_y, center_x, r, h, w)
 
-    return image[:, top : bottom + 1, left : right + 1]
+    return image[:, top : top + 2 * r + 1, left : left + 2 * r + 1]
 
 
 # Iterate over the data loader to get batches of data
