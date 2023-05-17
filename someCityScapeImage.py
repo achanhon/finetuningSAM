@@ -49,37 +49,37 @@ def ajust_bounding_box(y, x, r, h, w):
     return left, top, right, bottom
 
 
+def compute_value_bounding_box(image, k):
+    image_array = numpy.array(image)
+    rows, cols = image_array.shape
+
+    # Find indices where image equals k
+    k_indices = numpy.where(image_array == k)
+
+    if len(k_indices[0]) == 0:
+        # The value was not found, return None
+        return None
+
+    # Compute bounding box coordinates
+    min_row = numpy.min(k_indices[0])
+    min_col = numpy.min(k_indices[1])
+    max_row = numpy.max(k_indices[0])
+    max_col = numpy.max(k_indices[1])
+
+
 # Define a function to extract the square bounding box
 def extract_bounding_box(image, sem_labels, ins_labels):
     _, h, w = image.shape
 
-    
-    torchvision.utils.save_image((sem_labels/255).float(), "build/wtf.png")
-    torchvision.utils.save_image((ins_labels/255).float(), "build/ceu.png")
-    quit()
-
     # Get the pixel coordinates of all pedestrian instances
-    pedestrian_indices = torch.nonzero(
-        (sem_labels == 7) & (ins_labels > 0),
-        as_tuple=False,
-    )
+    pedestrian_indices = (ins_labels * (sem_labels == 7)).flatten().max()
 
-    if len(pedestrian_indices) == 0:
+    if pedestrian_indices == 0:
         return None  # No pedestrian instances found
 
-    # Select the first pedestrian instance
-    pedestrian_idx = pedestrian_indices[0]
-    ins_label = ins_labels[pedestrian_idx]
-
     # Get the bounding box coordinates
-    bbox = ins_label.unique(return_inverse=True, sorted=True)[1].reshape(
-        ins_label.shape
-    )
-    ymin, xmin, ymax, xmax = (
-        torch.min(bbox[:, 0]),
-        torch.min(bbox[:, 1]),
-        torch.max(bbox[:, 2]),
-        torch.max(bbox[:, 3]),
+    ymin, xmin, ymax, xmax = compute_value_bounding_box(
+        ins_labels.numpy(), pedestrian_indices
     )
 
     # Calculate the center of the bounding box
@@ -113,7 +113,9 @@ with torch.no_grad():
 
             if cropped_image is not None:
                 # Resize the cropped image to 256x256 pixels
-                resized_image = F.interpolate(cropped_image, size=(256,256), mode='bilinear')
+                resized_image = F.interpolate(
+                    cropped_image, size=(256, 256), mode="bilinear"
+                )
                 torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
                 I += 1
 
