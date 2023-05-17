@@ -94,20 +94,21 @@ def extract_bounding_box(image, sem_labels, ins_labels):
 
 # Iterate over the data loader to get batches of data
 I = 0
-for batch in data_loader:
-    images, (sem_labels, ins_labels) = batch
+with torch.no_grad():
+    for batch in data_loader:
+        images, (sem_labels, ins_labels) = batch
 
-    # Iterate over each image in the batch
-    for i in range(len(images)):
-        image = images[i]
+        # Iterate over each image in the batch
+        for i in range(len(images)):
+            image = images[i]
 
-        # Extract the bounding box for the pedestrian
-        cropped_image = extract_bounding_box(image, sem_labels[i], ins_labels[i])
+            # Extract the bounding box for the pedestrian
+            cropped_image = extract_bounding_box(image, sem_labels[i], ins_labels[i])
 
-        if cropped_image is not None:
-            # Resize the cropped image to 256x256 pixels
-            resized_image = cropped_image.resize((256, 256))
-            torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
-            I += 1
+            if cropped_image is not None:
+                # Resize the cropped image to 256x256 pixels
+                resized_image = cropped_image.resize((256, 256))
+                torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
+                I += 1
 
-    quit()
+        quit()
