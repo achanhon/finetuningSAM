@@ -51,7 +51,7 @@ with torch.no_grad():
     x["point_labels"] = torch.ones(1,1).cuda()
 
 
-    out = sam([x],)[0]
+    out = sam([x],False)[0]
     out = out["masks"][0][0].float().cpu().numpy()
     
     tmp = PIL.Image.fromarray(numpy.uint8(out!=0)*255)
