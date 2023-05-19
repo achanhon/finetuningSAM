@@ -27,9 +27,9 @@ with torch.no_grad():
         x["point_labels"] = torch.ones(1, 1).cuda()
 
         out = sam([x], True)[0]
-        print(out["masks"].shape)
-        quit()
-        out = out["masks"][0][0].float().cpu().numpy()
+        out = out["masks"][0]
+        out,_ = out.max(0)
+        out = out.float().cpu().numpy()
 
         out = PIL.Image.fromarray(numpy.uint8(out != 0) * 255)
         out.save("build/" + path + "_y.png")
