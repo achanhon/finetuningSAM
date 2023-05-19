@@ -135,6 +135,8 @@ class Sam(nn.Module):
             )
             if self.hackforfinetuning:
                 u,v = low_res_masks[0], iou_predictions[0]
+                print(u.shape)
+                quit()
                 v = v.transpose(0,1)
                 u = u.view(5*256)
                 u = torch.nn.functional.leaky_relu(self.myhack(u))
