@@ -1,6 +1,7 @@
 .nfs*
 
 nohup.out
+cityscapesample/*
 
 # compilation and distribution
 __pycache__
