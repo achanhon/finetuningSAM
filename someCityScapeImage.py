@@ -29,9 +29,9 @@ cityscapes_dataset = torchvision.datasets.Cityscapes(
 )
 
 # Create a DataLoader for efficient batched data loading
-batch_size = 64
+batch_size = 32
 shuffle = False  # Set to True if you want to shuffle the data
-num_workers = 4  # Number of subprocesses to use for data loading
+num_workers = 2  # Number of subprocesses to use for data loading
 data_loader = torch.utils.data.DataLoader(
     cityscapes_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
 )
@@ -70,12 +70,12 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     x = (xmin + xmax) // 2
     y = (ymin + ymax) // 2
     r = max(xmax - xmin, ymax - ymin) // 2
-    if r < 128:
-        return None  # No pedestrian enough large
     r = min(int(r * 1.2), 230)
+    if r < 128 or x < r or y < r or x + r >= w or y + r >= h:
+        return None  # No pedestrian enough large
 
-    y = min(max(r + 1, y), h - r - 2)
-    x = min(max(r + 1, x), w - r - 2)
+    # y = min(max(r + 1, y), h - r - 2)
+    # x = min(max(r + 1, x), w - r - 2)
 
     out1 = image[:, y - r : y + r + 1, x - r : x + r + 1]
     out2 = (ins_labels[y - r : y + r + 1, x - r : x + r + 1] == k).float()
@@ -85,7 +85,7 @@ def extract_bounding_box(image, sem_labels, ins_labels):
 # Iterate over the data loader to get batches of data
 I = 0
 with torch.no_grad():
-    for batch in data_loader:
+    for J, batch in enumerate(data_loader):
         images, (sem_labels, ins_labels) = batch
 
         # Iterate over each image in the batch
@@ -108,8 +108,6 @@ with torch.no_grad():
                     mode="bilinear",
                 )[0][0]
                 torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
-                #torchvision.utils.save_image(rdebug, "build/" + str(I) + "_y.png")
+                # torchvision.utils.save_image(rdebug, "build/" + str(I) + "_y.png")
                 I += 1
-                print(I)
-                if I == 50:
-                    quit()
+                print(I, J)
