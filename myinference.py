@@ -3,7 +3,7 @@ import os
 import segment_anything
 
 import PIL
-from PIL import Image
+from PIL import Image, ImageFilter
 import numpy
 
 paths = os.listdir("cityscapesample")
@@ -36,12 +36,16 @@ with torch.no_grad():
 
 
 patch = PIL.Image.open("patchs/epoch_100_universal_patch.png")
+patch = patch.resize((80, 80), PIL.Image.BILINEAR)
+patch = patch.filter(PIL.ImageFilter.GaussianBlur(radius=7))
 patch = numpy.asarray(patch.convert("RGB").copy())
+
+
 with torch.no_grad():
     for path in paths:
         image = PIL.Image.open("cityscapesample/" + path)
         image = numpy.asarray(image.convert("RGB").copy())
-        image[0:110, 0:110, :] = patch
+        image[0:80, 0:80, :] = patch
         tmp = PIL.Image.fromarray(image)
         tmp.save("build/" + path + "_a.png")
         image = numpy.transpose(image, axes=(2, 0, 1))
