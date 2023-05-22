@@ -102,15 +102,13 @@ with torch.no_grad():
                 resized_image = torch.nn.functional.interpolate(
                     cropped_image[0].unsqueeze(0), size=(256, 256), mode="bilinear"
                 )[0]
-                resized_debug = torch.nn.functional.interpolate(
-                    cropped_image[1].unsqueeze(0).unsqueeze(0), size=(256, 256), mode="bilinear"
+                rdebug = torch.nn.functional.interpolate(
+                    cropped_image[1].unsqueeze(0).unsqueeze(0),
+                    size=(256, 256),
+                    mode="bilinear",
                 )[0][0]
-                torchvision.utils.save_image(
-                    resized_image, "build/" + str(I) + "_x.png"
-                )
-                torchvision.utils.save_image(
-                    resized_debug, "build/" + str(I) + "_y.png"
-                )
+                torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
+                #torchvision.utils.save_image(rdebug, "build/" + str(I) + "_y.png")
                 I += 1
                 print(I)
                 if I == 50:
