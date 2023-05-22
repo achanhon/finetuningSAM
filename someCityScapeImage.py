@@ -54,10 +54,14 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     _, h, w = image.shape
 
     # Get the pixel coordinates of all pedestrian instances
-    k = (ins_labels * (sem_labels == 24)).flatten().max()
+    tmp = ins_labels * (sem_labels == 24)
+    k = tmp.flatten().max()
 
     if k == 0:
         return None  # No pedestrian instances found
+    else:
+        l = [(-(tmp == (r + 1)).sum(), r) for r in range(k)]
+        k = l[0][1]
 
     # Get the bounding box coordinates
     ymin, xmin, ymax, xmax = compute_value_bounding_box(ins_labels, k)
@@ -67,7 +71,9 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     y = (ymin + ymax) // 2
     r = max(xmax - xmin, ymax - ymin) // 2
     r = int(r * 1.2)
-    r = min(r, 200)
+    if r < 128:
+        return None  # No pedestrian enough large
+    r = min(r, 230)
 
     y = min(max(r, y), h - r - 1) - r
     x = min(max(r, x), w - r - 1) - r
@@ -97,5 +103,5 @@ with torch.no_grad():
                 )[0]
                 torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
                 I += 1
-
-        quit()
+                if I == 50:
+                    quit()
