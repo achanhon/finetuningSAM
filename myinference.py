@@ -28,7 +28,7 @@ with torch.no_grad():
 
         out = sam([x], True)[0]
         out = out["masks"][0]
-        out,_ = out.max(0)
+        out, _ = out.max(0)
         out = out.float().cpu().numpy()
 
         out = PIL.Image.fromarray(numpy.uint8(out != 0) * 255)
@@ -41,7 +41,7 @@ with torch.no_grad():
     for path in paths:
         image = PIL.Image.open("cityscapesample/" + path)
         image = numpy.asarray(image.convert("RGB").copy())
-        image[0:110,0:110,:]=patch
+        image[0:110, 0:110, :] = patch
         tmp = PIL.Image.fromarray(image)
         tmp.save("build/" + path + "_a.png")
         image = numpy.transpose(image, axes=(2, 0, 1))
@@ -54,7 +54,7 @@ with torch.no_grad():
 
         out = sam([x], True)[0]
         out = out["masks"][0]
-        out,_ = out.max(0)
+        out, _ = out.max(0)
         out = out.float().cpu().numpy()
 
         out = PIL.Image.fromarray(numpy.uint8(out != 0) * 255)
