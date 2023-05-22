@@ -2,6 +2,7 @@
 
 nohup.out
 cityscapesample/*
+epoch_100_universal_patch.png
 
 # compilation and distribution
 __pycache__
