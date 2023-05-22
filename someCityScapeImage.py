@@ -77,7 +77,9 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     y = min(max(r + 1, y), h - r - 2)
     x = min(max(r + 1, x), w - r - 2)
 
-    return image[:, y - r : y + r + 1, x - r : x + r + 1]
+    out1 = image[:, y - r : y + r + 1, x - r : x + r + 1]
+    out2 = ins_labels[:, y - r : y + r + 1, x - r : x + r + 1] == k
+    return out1, out2
 
 
 # Iterate over the data loader to get batches of data
@@ -98,9 +100,17 @@ with torch.no_grad():
             if cropped_image is not None:
                 # Resize the cropped image to 256x256 pixels
                 resized_image = torch.nn.functional.interpolate(
-                    cropped_image.unsqueeze(0), size=(256, 256), mode="bilinear"
+                    cropped_image[0].unsqueeze(0), size=(256, 256), mode="bilinear"
                 )[0]
-                torchvision.utils.save_image(resized_image, "build/" + str(I) + ".png")
+                resized_debug = torch.nn.functional.interpolate(
+                    cropped_image[1].unsqueeze(0), size=(256, 256), mode="bilinear"
+                )[0]
+                torchvision.utils.save_image(
+                    resized_image, "build/" + str(I) + "_x.png"
+                )
+                torchvision.utils.save_image(
+                    resized_debug, "build/" + str(I) + "_y.png"
+                )
                 I += 1
                 print(I)
                 if I == 50:
