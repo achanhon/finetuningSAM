@@ -70,15 +70,14 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     x = (xmin + xmax) // 2
     y = (ymin + ymax) // 2
     r = max(xmax - xmin, ymax - ymin) // 2
-    r = int(r * 1.2)
     if r < 128:
         return None  # No pedestrian enough large
-    r = min(r, 230)
+    r = min(int(r * 1.2), 230)
 
-    y = min(max(r, y), h - 2 * r - 2) - r
-    x = min(max(r, x), w - 2 * r - 2) - r
+    y = min(max(r + 1, y), h - r - 2)
+    x = min(max(r + 1, x), w - r - 2)
 
-    return image[:, y : y + 2 * r + 1, x : x + 2 * r + 1]
+    return image[:, y - r : y + r + 1, x - r : x + r + 1]
 
 
 # Iterate over the data loader to get batches of data
