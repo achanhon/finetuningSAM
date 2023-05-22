@@ -78,7 +78,7 @@ def extract_bounding_box(image, sem_labels, ins_labels):
     x = min(max(r + 1, x), w - r - 2)
 
     out1 = image[:, y - r : y + r + 1, x - r : x + r + 1]
-    out2 = ins_labels[:, y - r : y + r + 1, x - r : x + r + 1] == k
+    out2 = (ins_labels[y - r : y + r + 1, x - r : x + r + 1] == k).float()
     return out1, out2
 
 
@@ -103,8 +103,8 @@ with torch.no_grad():
                     cropped_image[0].unsqueeze(0), size=(256, 256), mode="bilinear"
                 )[0]
                 resized_debug = torch.nn.functional.interpolate(
-                    cropped_image[1].unsqueeze(0), size=(256, 256), mode="bilinear"
-                )[0]
+                    cropped_image[1].unsqueeze(0).unsqueeze(0), size=(256, 256), mode="bilinear"
+                )[0][0]
                 torchvision.utils.save_image(
                     resized_image, "build/" + str(I) + "_x.png"
                 )
