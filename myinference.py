@@ -37,8 +37,10 @@ with torch.no_grad():
 
 patch = PIL.Image.open("patchs/epoch_100_universal_patch.png")
 patch = patch.resize((80, 80), PIL.Image.BILINEAR)
-patch = patch.filter(PIL.ImageFilter.GaussianBlur(radius=7))
+patch = patch.filter(PIL.ImageFilter.GaussianBlur(radius=2))
 patch = numpy.asarray(patch.convert("RGB").copy())
+# debug
+patch = numpy.ones((80, 80))
 
 
 with torch.no_grad():
