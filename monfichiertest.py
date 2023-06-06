@@ -48,7 +48,7 @@ with torch.no_grad():
     x["image"] = tmp.cuda()
     x["original_size"] = (256, 256)
     x["point_coords"] = torch.ones(1, 1, 2).cuda() * 110
-    # x["point_labels"] = torch.ones(1, 1).cuda()
+    x["point_labels"] = torch.ones(1, 1).cuda()
 
     out = sam([x], False)[0]
     out = out["masks"][0][0].float().cpu().numpy()
