@@ -37,11 +37,12 @@ import numpy
 
 with torch.no_grad():
     tmp = PIL.Image.open("/scratchf/miniworld/potsdam/train/0_x.png")
-    tmp.save("build/x.png")
 
     tmp = numpy.asarray(tmp.convert("RGB").copy())
     h, w, c = tmp.shape
     tmp = tmp[h // 2 - 128 : h // 2 + 128, w // 2 - 128 : w // 2 + 128, :]
+    tmpbis = PIL.Image.fromarray(tmp)
+    tmpbis.save("build/x.png")
     tmp = torch.Tensor(numpy.transpose(tmp, axes=(2, 0, 1)))
 
     x = {}
@@ -63,7 +64,7 @@ for row in range(16, 255, 32):
         tmp.append((row, col))
 magrille = torch.zeros(len(tmp), 1, 2).cuda()
 magrilleL = torch.zeros(len(tmp), 1).cuda()
-for i, (row, col) in enumerate(magrille):
+for i, (row, col) in enumerate(tmp):
     magrille[i][0][0] = row
     magrille[i][0][1] = col
     magrilleL[i][0] = i
@@ -75,16 +76,20 @@ with torch.no_grad():
     tmp = numpy.asarray(tmp.convert("RGB").copy())
     h, w, c = tmp.shape
     tmp = tmp[h // 2 - 128 : h // 2 + 128, w // 2 - 128 : w // 2 + 128, :]
+    tmpbis = PIL.Image.fromarray(tmp)
+    tmpbis.save("build/x.png")
     tmp = torch.Tensor(numpy.transpose(tmp, axes=(2, 0, 1)))
 
     x = {}
     x["image"] = tmp.cuda()
     x["original_size"] = (256, 256)
     x["point_coords"] = magrille
-    # x["point_labels"] = magrilleL
+    x["point_labels"] = magrilleL
 
-    out = sam([x], False)[0]
-    out = out["masks"][0][0].float().cpu().numpy()
+    out = sam([x], False)[0]["masks"]
+    out, _ = out.max(1)
+    out = out.cpu().numpy()
 
-    tmp = PIL.Image.fromarray(numpy.uint8(out != 0) * 255)
-    tmp.save("build/y.png")
+    for i in range(magrille.shape[0]):
+        tmp = PIL.Image.fromarray(numpy.uint8(out[i] != 0) * 255)
+        tmp.save("build/y" + str(i) + ".png")
