@@ -46,7 +46,7 @@ class SAMasInput:
         tmp, _ = tmp[0].max(0)
         return tmp
 
-    def getpseudocolor(masks,flag = False):
+    def getpseudocolor(self,masks,flag = False):
         tmp = masks.flatten(1)
         intersectionM = tmp.unsqueeze(0) * tmp.unsqueeze(1)
         unionM = tmp.unsqueeze(0) + tmp.unsqueeze(1) - intersectionM
@@ -61,7 +61,9 @@ class SAMasInput:
                 kept.append(i)
         
         if remove==[] or flag:
-            
+            self.createpseudocolor(masks)
         else:
             return getpseudocolor(masks[kept],True)
-         
+    
+    def createpseudocolor(self,masks):
+        pass
