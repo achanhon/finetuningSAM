@@ -109,6 +109,7 @@ for i, (row, col) in enumerate(tmp):
     magrille[i][0][0] = row
     magrille[i][0][1] = col
     magrilleL[i][0] = i
+print(i)
 
 with torch.no_grad():
     tmp = PIL.Image.open("build/grosse.png")
