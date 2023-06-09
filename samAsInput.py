@@ -54,10 +54,8 @@ class SAMasInput:
             pseudocolor = self.getpseudocolor(masks).unsqueeze(0)
 
         size_ = (x_.shape[1], x_.shape[2])
-        border = torch.nn.functional.interpolate(border, size=size_, mode="bilinear")
-        pseudocolor = torch.nn.functional.interpolate(
-            border, size=size_, mode="bilinear"
-        )
+        border = torch.nn.functional.interpolate(border, size=size_)
+        pseudocolor = torch.nn.functional.interpolate(pseudocolor, size=size_)
         return border[0][0], pseudocolor[0]
 
     def getborder(self, masks):
@@ -101,7 +99,6 @@ class SAMasInput:
             tmp[1] = self.palette[i % 9][1] * masks[i]
             tmp[2] = self.palette[i % 9][2] * masks[i]
             out = torch.max(out, tmp)
-            return out
         return out
 
 
@@ -117,8 +114,6 @@ if __name__ == "__main__":
     tmp = numpy.asarray(tmp.convert("RGB").copy())
     x = torch.Tensor(numpy.transpose(tmp, axes=(2, 0, 1)))
     border, pseudolabel = sam.applySAM(x)
-    print(border.shape)
-    print(pseudolabel.shape)
 
     torchvision.utils.save_image(border, "build/border.png")
     torchvision.utils.save_image(pseudolabel / 255, "build/pseudolabel.png")
