@@ -269,7 +269,7 @@ def getDIGITANIE(flag, root="/scratchf/AI4GEO/DIGITANIE/", tile=512):
     for city in infos:
         for i in range(10):
             x = root + city + infos[city]["pathdata"] + str(i) + ".tif"
-            y = root + city + "/COS9/" + city +"_"+ str(i) + infos[city]["suffixvt"]
+            y = root + city + "/COS9/" + city + "_" + str(i) + infos[city]["suffixvt"]
             paths.append((x, y))
 
     return CropExtractorDigitanie(flag, paths, tile=tile)
