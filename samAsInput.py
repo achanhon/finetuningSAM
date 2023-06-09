@@ -10,8 +10,8 @@ class SAMasInput:
         self.sam.eval()
 
         tmp = []
-        for row in range(6, 255, 13):
-            for col in range(6, 255, 13):
+        for row in range(8, 255, 17):
+            for col in range(8, 255, 17):
                 tmp.append((row, col))
         self.magrille = torch.zeros(len(tmp), 1, 2).cuda()
         self.magrilleL = torch.zeros(len(tmp), 1).cuda()
@@ -35,52 +35,61 @@ class SAMasInput:
             ]
         ).cuda()
 
+    def applySAMmultiple(self,x):
+        with torch.no_grad():
+            xc =torch.ones(x.shape[0],3,x.shape[2],x.shape[3])
+            xb =torch.ones(x.shape[0],1,x.shape[2],x.shape[3])
+            for i in range(x.shape[0]):
+                b,c = self.applySAM(x[0])
+                xc[i]=c
+                xb[i]=b
+        return torch.cat([x,xb],dim=1),xb
+
     def applySAM(self, x_):
         tmp = torch.nn.functional.interpolate(
-            x_.unsqueeze(0), size=(256), mode="bilinear"
+            x_.unsqueeze(0), size=(256,256), mode="bilinear"
         )
-        with torch.no_grad():
-            x = {}
-            x["image"] = tmp[0].cuda()
-            x["original_size"] = (256, 256)
-            x["point_coords"] = self.magrille
-            x["point_labels"] = self.magrilleL
+        x = {}
+        x["image"] = tmp[0].cuda()
+        x["original_size"] = (256, 256)
+        x["point_coords"] = self.magrille
+        x["point_labels"] = self.magrilleL
 
-            masks = self.sam([x], False)[0]["masks"]
+        masks = self.sam([x], False)[0]["masks"]
 
-            # get the largest mask for each point
-            masks, _ = masks.max(1)
-            masks = (masks > 0).float()
+        # get the largest mask for each point
+        masks, _ = masks.max(1)
+        masks = (masks > 0).float()
 
-            # erosion
-            masks = 1 - torch.nn.functional.max_pool2d(
-                1 - masks, kernel_size=3, stride=1, padding=1
-            )
+        # erosion
+        masks = 1 - torch.nn.functional.max_pool2d(
+            1 - masks, kernel_size=3, stride=1, padding=1
+        )
 
-            # NMS
-            tmp = [(masks[i].sum(), i) for i in range(masks.shape[0])]
-            tmp = sorted(tmp)
-            remove = []
-            for i in range(len(tmp)):
-                if tmp[i][0] == 0:
-                    remove.append(i)
+        # NMS
+        tmp = [(masks[i].sum(), i) for i in range(masks.shape[0])]
+        tmp = sorted(tmp)
+        remove = []
+        for i in range(len(tmp)):
+            if tmp[i][0] == 0:
+                remove.append(i)
+                break
+            for j in range(i, len(tmp)):
+                if tmp[i][0] <= tmp[j][0] * 0.7:
                     break
-                for j in range(i, len(tmp)):
-                    if tmp[i][0] <= tmp[j][0] * 0.7:
+                else:
+                    I = masks[tmp[i][1]] * masks[tmp[j][1]]
+                    U = masks[tmp[i][1]] + masks[tmp[j][1]] - I
+                    IoU = I.sum() / (U.sum() + 0.1)
+                    if IoU > 0.7:
+                        remove.append(i)
                         break
-                    else:
-                        I = masks[tmp[i][1]] * masks[tmp[j][1]]
-                        U = masks[tmp[i][1]] + masks[tmp[j][1]] - I
-                        IoU = I.sum() / (U.sum() + 0.1)
-                        if IoU > 0.7:
-                            remove.append(i)
-                            break
-            remove = set(remove)
-            masks = masks[[i for i in range(len(tmp)) if i not in remove]]
+        remove = set(remove)
+        masks = masks[[i for i in range(len(tmp)) if i not in remove]]
 
-            # border and pseudo color
-            border = self.getborder(masks).unsqueeze(0).unsqueeze(0)
-            pseudocolor = self.getpseudocolor(masks).unsqueeze(0)
+        # border and pseudo color
+        border = self.getborder(masks).unsqueeze(0).unsqueeze(0)
+        pseudocolor = self.getpseudocolor(masks).unsqueeze(0)
 
         size_ = (x_.shape[1], x_.shape[2])
         border = torch.nn.functional.interpolate(border, size=size_, mode="bilinear")

@@ -3,21 +3,6 @@ import torch
 import skimage
 
 
-def numpyTOtorch(x):
-    return torch.Tensor(numpy.transpose(x, axes=(2, 0, 1)))
-
-
-def symetrie(x, y, ijk):
-    i, j, k = ijk[0], ijk[1], ijk[2]
-    if i == 1:
-        x, y = numpy.transpose(x, axes=(1, 0, 2)), numpy.transpose(y, axes=(1, 0))
-    if j == 1:
-        x, y = numpy.flip(x, axis=1), numpy.flip(y, axis=1)
-    if k == 1:
-        x, y = numpy.flip(x, axis=0), numpy.flip(y, axis=0)
-    return x.copy(), y.copy()
-
-
 def confusion(y, z):
     cm = torch.zeros(2, 2).cuda()
     for a, b in [(0, 0), (0, 1), (1, 0), (1, 1)]:
@@ -109,52 +94,96 @@ def confusionInstance(y, z):
     return gscore, recall, precision, visu, G
 
 
+import torchvision
+import samAsInput
+
+
+class GlobalLocal(torch.nn.Module):
+    def __init__(self):
+        super(GlobalLocal, self).__init__()
+        self.sam = samAsInput.SAMasInput()
+
+        self.backbone = torchvision.models.efficientnet_v2_l(weights="DEFAULT").features
+        self.compress = torch.nn.Conv2d(1280, 32, kernel_size=1)
+
+        self.c1 = torch.nn.Conv2d(98, 64, kernel_size=7, padding=3)
+        self.c2 = torch.nn.Conv2d(64, 128, kernel_size=1)
+        self.c3 = torch.nn.Conv2d(128, 64, kernel_size=5, padding=2)
+        self.c4 = torch.nn.Conv2d(64, 128, kernel_size=1)
+        self.c5 = torch.nn.Conv2d(256, 2, kernel_size=3, padding=1)
+
+        with torch.no_grad():
+            old = self.backend[0][0].weight.data.clone() / 2
+            self.backend[0][0] = torch.nn.Conv2d(
+                6, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False
+            )
+            tmp = torch.cat([old, old], dim=1)
+            self.backend[0][0].weight = torch.nn.Parameter(tmp)
+
+        self.lrelu = torch.nn.LeakyReLU(negative_slope=0.1, inplace=False)
+
+    def forward(self, x):
+        _, _, h, w = x.shape
+
+        x, mask = self.sam.applySAMmultiple(x)
+
+        x = ((x / 255) - 0.5) / 0.25
+        x = self.backbone(x)
+        x = self.compress(x)
+        x = torch.nn.functional.interpolate(x, size=(h, w), mode="bilinear")
+
+        tmp = 10 * x - 9 * torch.nn.functional.max_pool2d(
+            x, kernel_size=3, padding=1, stride=1
+        )
+        x = torch.cat([x, tmp, x * (1 - mask), mask, (1 - mask)], dim=1)
+
+        x = self.lrelu(self.c1(x))
+        xx = self.lrelu(self.c2(x))
+        x = self.lrelu(self.c3(xx))
+        x = self.lrelu(self.c4(x))
+        x = torch.cat([x, xx], dim=1)
+        return self.lrelu(self.c5(x))
+
+
 import queue
 import threading
 import PIL
 from PIL import Image
 import rasterio
+import random
 
 
-class CropExtractor(threading.Thread):
-    def __init__(self, paths, flag, tile=256):
+class CropExtractorDigitanie(threading.Thread):
+    def __init__(self, paths, flag, tile):
         threading.Thread.__init__(self)
         self.isrunning = False
-        self.maxsize = 500
+        self.maxsize = 10
         self.tilesize = tile
 
-        pathdata, pathvt, suffixvt = paths
-        self.pathdata = pathdata
-        self.pathvt = pathvt
-        self.suffixvt = suffixvt
         assert flag in ["even", "odd", "all"]
         self.flag = flag
 
-        if self.flag == "all":
-            self.NB = 10
-        else:
-            self.NB = 5
-
-    def getImageAndLabel(self, i, torchformat=False):
-        assert i < self.NB
-
-        if self.flag == "odd":
-            i = i * 2 + 1
         if self.flag == "even":
-            i = i * 2
+            paths = paths[::2]
+        if self.flag == "odd":
+            paths = paths[1::2]
+        self.paths = paths
 
-        with rasterio.open(self.pathdata + str(i) + ".tif") as src:
-            r = minmax01(src.read(1))
-            g = minmax01(src.read(2))
-            b = minmax01(src.read(3))
-            x = numpy.stack([r, g, b], axis=-1)
+    def getImageAndLabel(self, i, torchformat=True):
+        assert i < len(self.paths)
 
-        y = PIL.Image.open(self.pathvt + str(i) + self.suffixvt).convert("RGB").copy()
+        with rasterio.open(self.paths[i][0]) as src:
+            r = numpy.clip(src.read(1) * 2, 0, 1)
+            g = numpy.clip(src.read(2) * 2, 0, 1)
+            b = numpy.clip(src.read(3) * 2, 0, 1)
+            x = numpy.stack([r, g, b], axis=0)
+
+        y = PIL.Image.open(self.paths[i][1]).convert("RGB").copy()
         y = numpy.asarray(y)
         y = numpy.uint8((y[:, :, 0] == 250) * (y[:, :, 1] == 50) * (y[:, :, 2] == 50))
 
         if torchformat:
-            return numpyTOtorch(x), smooth(torch.Tensor(y))
+            return torch.Tensor(x), torch.Tensor(y)
         else:
             return x, y
 
@@ -164,83 +193,57 @@ class CropExtractor(threading.Thread):
 
     def getBatch(self, batchsize):
         tilesize = self.tilesize
-        x = torch.zeros(batchsize, 3, self.tilesize, tilesize)
+        x = torch.zeros(batchsize, 3, tilesize, tilesize)
         y = torch.zeros(batchsize, tilesize, tilesize)
         for i in range(batchsize):
             x[i], y[i] = self.getCrop()
+        return x, y
+
+    def symetrie(x, y):
+        if random.random() > 0.5:
+            x[0] = numpy.transpose(x[0], axes=(1, 0))
+            x[1] = numpy.transpose(x[1], axes=(1, 0))
+            x[2] = numpy.transpose(x[2], axes=(1, 0))
+            y = numpy.transpose(y, axes=(1, 0))
+        if random.random() > 0.5:
+            x[0] = numpy.flip(x[0], axis=1)
+            x[1] = numpy.flip(x[1], axis=1)
+            x[2] = numpy.flip(x[2], axis=1)
+            y = numpy.flip(y, axis=1)
+        if random.random() > 0.5:
+            x[0] = numpy.flip(x[0], axis=0)
+            x[1] = numpy.flip(x[1], axis=0)
+            x[2] = numpy.flip(x[2], axis=0)
+            y = numpy.flip(y, axis=0)
         return x, y
 
     def run(self):
         self.isrunning = True
         self.q = queue.Queue(maxsize=self.maxsize)
         tilesize = self.tilesize
-        debug = True
+        I = list(range(len(self.paths)))
 
         while True:
-            for i in range(self.NB):
-                image, label = self.getImageAndLabel(i)
+            random.shuffle(I)
+            for i in I:
+                image, label = self.getImageAndLabel(i, torchformat=False)
 
-                ntile = 50
-                RC = numpy.random.rand(ntile, 2)
-                flag = numpy.random.randint(0, 2, size=(ntile, 3))
-                for j in range(ntile):
-                    r = int(RC[j][0] * (image.shape[0] - tilesize - 2))
-                    c = int(RC[j][1] * (image.shape[1] - tilesize - 2))
-                    im = image[r : r + tilesize, c : c + tilesize, :]
-                    mask = label[r : r + tilesize, c : c + tilesize]
+                r = random.random() * 1500
+                c = random.random() * 1500
+                im = image[:, r : r + tilesize, c : c + tilesize]
+                mask = label[r : r + tilesize, c : c + tilesize]
 
-                    if numpy.sum(numpy.int64(mask != 0)) == 0:
-                        continue
-                    if numpy.sum(numpy.int64(mask == 0)) == 0:
-                        continue
+                if numpy.sum(numpy.int64(mask != 0)) == 0:
+                    continue
+                if numpy.sum(numpy.int64(mask == 0)) == 0:
+                    continue
 
-                    x, y = symetrie(im.copy(), mask.copy(), flag[j])
-                    x, y = numpyTOtorch(x), smooth(torch.Tensor(y))
-                    self.q.put((x, y), block=True)
+                x, y = self.symetrie(im.copy(), mask.copy())
+                x, y = torch.Tensor(x), torch.Tensor(y)
+                self.q.put((x, y), block=True)
 
 
-class DIGITANIE:
-    def __init__(self, root, infos, flag, tile=256):
-        self.run = False
-        self.tilesize = tile
-        self.cities = [city for city in infos]
-        self.root = root
-        self.NBC = len(self.cities)
-
-        self.allimages = []
-        self.data = {}
-        for city in self.cities:
-            pathdata = root + city + infos[city]["pathdata"]
-            pathvt = root + city + "/COS9/" + city + "_"
-            paths = pathdata, pathvt, infos[city]["suffixvt"]
-            self.data[city] = CropExtractor(paths, flag, tile=tile)
-            self.allimages.extend([(city, i) for i in range(self.data[city].NB)])
-        self.NB = len(self.allimages)
-
-    def getImageAndLabel(self, i, torchformat=False):
-        city, j = self.allimages[i]
-        return self.data[city].getImageAndLabel(j, torchformat=torchformat)
-
-    def start(self):
-        if not self.run:
-            self.run = True
-            for city in self.cities:
-                self.data[city].start()
-
-    def getBatch(self, batchsize):
-        assert self.run
-        batchchoice = (torch.rand(batchsize) * self.NBC).long()
-
-        x = torch.zeros(batchsize, 3, self.tilesize, self.tilesize)
-        y = torch.zeros(batchsize, self.tilesize, self.tilesize)
-        for i in range(batchsize):
-            x[i], y[i] = self.data[self.cities[batchchoice[i]]].getCrop()
-        return x, y
-
-
-def getDIGITANIE(flag, root="/scratchf/AI4GEO/DIGITANIE/", tile=256):
-    assert flag in ["odd", "even", "all"]
-
+def getDIGITANIE(flag, root="/scratchf/AI4GEO/DIGITANIE/", tile=512):
     infos = {}
     infos["Arcachon"] = {"pathdata": "/Arcachon_EPSG32630_", "suffixvt": "-v4.tif"}
     infos["Biarritz"] = {"pathdata": "/Biarritz_EPSG32630_", "suffixvt": "-v4.tif"}
@@ -262,101 +265,11 @@ def getDIGITANIE(flag, root="/scratchf/AI4GEO/DIGITANIE/", tile=256):
     infos["Tianjin"] = {"pathdata": "/Tianjin_32650_", "suffixvt": "-v4.tif"}
     infos["Toulouse"] = {"pathdata": "/Toulouse_EPSG32631_", "suffixvt": "-v4.tif"}
 
-    return DIGITANIE(root, infos, flag, tile=tile)
+    paths = []
+    for city in infos:
+        for i in range(10):
+            x = root + city + infos[city]["pathdata"] + str(i) + ".tif"
+            y = root + city + "/COS9/" + city + str(i) + infos[city]["suffixvt"]
+            paths.append((x,y))
 
-
-import torchvision
-import samAsInput
-
-
-class GlobalLocal(torch.nn.Module):
-    def __init__(self):
-        super(GlobalLocal, self).__init__()
-        self.backbone = torchvision.models.efficientnet_v2_l(weights="DEFAULT").features
-
-        self.compress = torch.nn.Conv2d(1280, 32, kernel_size=1)
-
-        with torch.no_grad():
-            old = self.backend[0][0].weight.data.clone() / 2
-            self.backend[0][0] = torch.nn.Conv2d(
-                6, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False
-            )
-            tmp = torch.cat([old, old], dim=1)
-            self.backend[0][0].weight = torch.nn.Parameter(tmp)
-
-    def forward(self, x):
-        _, _, h, w = x.shape
-        x = ((x / 255) - 0.5) / 0.25
-        x = self.backend(x)
-        x = self.classif(x)
-        x = torch.nn.functional.interpolate(x, size=(h, w), mode="bilinear")
-        return x
-
-    def forwardglobal(self, x):
-        x = 2 * x - 1
-        x = torch.nn.functional.interpolate(
-            x, size=(x.shape[2] * 2, x.shape[3] * 2), mode="bilinear"
-        )
-        return torch.nn.functional.leaky_relu(self.backbone(x))
-
-    def forwardlocal(self, x, f):
-        z = self.local1(x)
-        z = torch.cat([z, x, z * f, f], dim=1)
-        z = torch.nn.functional.leaky_relu(self.local2(z))
-        z = torch.cat([z, x, z * f, f], dim=1)
-        z = torch.nn.functional.leaky_relu(self.local3(z))
-
-        zz = torch.nn.functional.max_pool2d(z, kernel_size=3, stride=1, padding=1)
-        zz = torch.nn.functional.relu(100 * z - 99 * zz)
-
-        z = torch.cat([z, zz, z * f, zz * f], dim=1)
-        z = torch.nn.functional.leaky_relu(self.local4(z))
-        z = torch.cat([z, z * zz, z * f, zz * f], dim=1)
-        z = torch.nn.functional.leaky_relu(self.local5(z))
-        return self.classifhigh(z)
-
-    def forward(self, x, mode="normal"):
-        assert mode in ["normal", "globalonly", "nofinetuning"]
-
-        if mode != "normal":
-            with torch.no_grad():
-                f = self.forwardglobal(x)
-        else:
-            f = self.forwardglobal(x)
-
-        z = self.classiflow(f)
-        z = torch.nn.functional.interpolate(
-            z, size=(x.shape[2], x.shape[3]), mode="bilinear"
-        )
-        if mode == "globalonly":
-            return z
-
-        f = torch.nn.functional.leaky_relu(self.compress(f))
-        f = torch.nn.functional.interpolate(
-            f, size=(x.shape[2], x.shape[3]), mode="bilinear"
-        )
-        return self.forwardlocal(x, f) + z * 0.1
-
-
-def mapfiltered(spatialmap, setofvalue):
-    def myfunction(i):
-        return int(int(i) in setofvalue)
-
-    myfunctionVector = numpy.vectorize(myfunction)
-    return myfunctionVector(spatialmap)
-
-
-def sortmap(spatialmap):
-    tmp = torch.Tensor(spatialmap)
-    nb = int(tmp.flatten().max())
-    tmp = sorted([(-(tmp == i).float().sum(), i) for i in range(1, nb + 1)])
-    valuemap = {}
-    valuemap[0] = 0
-    for i, (k, j) in enumerate(tmp):
-        valuemap[j] = i + 1
-
-    def myfunction(i):
-        return int(valuemap[int(i)])
-
-    myfunctionVector = numpy.vectorize(myfunction)
-    return myfunctionVector(spatialmap)
+    return CropExtractorDigitanie(flag,paths,tile=tile)
