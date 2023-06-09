@@ -20,7 +20,7 @@ class SAMasInput:
             self.magrille[i][0][1] = col
             self.magrilleL[i][0] = i
 
-        self.pallette = torch.Tensor(
+        self.palette = torch.Tensor(
             [
                 [255.0, 0.0, 0.0],
                 [0.0, 255.0, 0.0],
@@ -50,36 +50,43 @@ class SAMasInput:
             masks, _ = masks.max(1)
             masks = (masks > 0).float()
 
-            border = self.getborder(masks)
-            pseudocolor = self.getpseudocolor(masks)
+            border = self.getborder(masks).unsqueeze(0).unsqueeze(0)
+            pseudocolor = self.getpseudocolor(masks).unsqueeze(0)
 
         size_ = (x_.shape[1], x_.shape[2])
-        border = torch.nn.functional.interpolate(border.unsqueeze(0), size=size_)
-        pseudocolor = torch.nn.functional.interpolate(border.unsqueeze(0), size=size_)
-        return border[0], pseudocolor[0]
+        border = torch.nn.functional.interpolate(border, size=size_, mode="bilinear")
+        pseudocolor = torch.nn.functional.interpolate(
+            border, size=size_, mode="bilinear"
+        )
+        return border[0][0], pseudocolor[0]
 
     def getborder(self, masks):
-        tmpavg = torch.nn.functional.avg_pool2d(tmp, kernel_size=3, padding=1, stride=1)
-        tmp = (tmpavg != 0).float() * (tmpavg != 1).float()
+        tmp = 1 - torch.nn.functional.max_pool2d(
+            1 - masks, kernel_size=3, stride=1, padding=1
+        )
+        tmp = (tmp == 0).float() * (masks == 1).float()
         tmp, _ = tmp.max(0)
         return tmp
 
     def getpseudocolor(self, masks, flag=False):
-        tmp = masks.flatten(1)
-        intersectionM = tmp.unsqueeze(0) * tmp.unsqueeze(1)
-        unionM = tmp.unsqueeze(0) + tmp.unsqueeze(1) - intersectionM
-        intersectionM, unionM = intersectionM.sum(2), unionM.sum(2)
+        tmp = torch.nn.functional.max_pool2d(masks, kernel_size=2)
+        tmp = tmp.half().flatten(1)
+        with torch.no_grad():
+            intersectionM = tmp.unsqueeze(0) * tmp.unsqueeze(1)
+            unionM = tmp.unsqueeze(0) + tmp.unsqueeze(1) - intersectionM
+            intersectionM, unionM = intersectionM.sum(2).float(), unionM.sum(2).float()
         IoU = intersectionM / (unionM + 0.001)
         kept = []
         for i in range(IoU.shape[0]):
-            v, j = max([(IoU[i][j], j) for j in range(i + 1, IoU.shape[0])])
-            if v > 0.8:
-                masks[j] = max(masks[j], masks[i])
+            l = [(IoU[i][j], j) for j in range(i + 1, IoU.shape[0])]
+            if l != [] and max(l)[0] > 0.6:
+                _, j = max(l)
+                masks[j] = torch.max(masks[j], masks[i])
             else:
                 kept.append(i)
 
         if len(kept) == IoU.shape[0] or flag:
-            self.createpseudocolor(masks)
+            return self.createpseudocolor(masks)
         else:
             return self.getpseudocolor(masks[kept], True)
 
@@ -87,11 +94,14 @@ class SAMasInput:
         masks = 1 - torch.nn.functional.max_pool2d(
             1 - masks, kernel_size=3, stride=1, padding=1
         )
-        out = torch.zeros(256, 256, 3).cuda()
+        out = torch.zeros(3, 256, 256).cuda()
         for i in range(masks.shape[0]):
-            out[0] += self.palette[i % 9][0] * masks[i]
-            out[1] += self.palette[i % 9][1] * masks[i]
-            out[2] += self.palette[i % 9][2] * masks[i]
+            tmp = torch.zeros(3, 256, 256).cuda()
+            tmp[0] = self.palette[i % 9][0] * masks[i]
+            tmp[1] = self.palette[i % 9][1] * masks[i]
+            tmp[2] = self.palette[i % 9][2] * masks[i]
+            out = torch.max(out, tmp)
+            return out
         return out
 
 
@@ -101,13 +111,12 @@ if __name__ == "__main__":
     import PIL
     from PIL import Image
     import numpy
+    import torchvision
 
     tmp = PIL.Image.open("build/grosse.png")
-    tmp = tmp.asarray(tmp.convert("RGB").copy())
+    tmp = numpy.asarray(tmp.convert("RGB").copy())
     x = torch.Tensor(numpy.transpose(tmp, axes=(2, 0, 1)))
     border, pseudolabel = sam.applySAM(x)
 
-    border = PIL.Image.fromarray(border.cpu().numpy())
-    border.save("build/border.png")
-    pseudolabel = PIL.Image.fromarray(pseudolabel.cpu().numpy())
-    pseudolabel.save("build/pseudolabel.png")
+    torchvision.utils.save_image(border, "build/border.png")
+    torchvision.utils.save_image(pseudolabel / 255, "build/pseudolabel.png")
