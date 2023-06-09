@@ -117,6 +117,8 @@ if __name__ == "__main__":
     tmp = numpy.asarray(tmp.convert("RGB").copy())
     x = torch.Tensor(numpy.transpose(tmp, axes=(2, 0, 1)))
     border, pseudolabel = sam.applySAM(x)
+    print(border.shape)
+    print(pseudolabel.shape)
 
     torchvision.utils.save_image(border, "build/border.png")
     torchvision.utils.save_image(pseudolabel / 255, "build/pseudolabel.png")
