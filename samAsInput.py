@@ -47,14 +47,43 @@ class SAMasInput:
             x["point_labels"] = self.magrilleL
 
             masks = self.sam([x], False)[0]["masks"]
+
+            # get the largest mask for each point
             masks, _ = masks.max(1)
             masks = (masks > 0).float()
 
+            # erosion
+            masks = 1 - torch.nn.functional.max_pool2d(
+                1 - masks, kernel_size=3, stride=1, padding=1
+            )
+
+            # NMS
+            tmp = [(masks[i].sum(), i) for i in range(masks.shape[0])]
+            tmp = sorted(tmp)
+            remove = []
+            for i in range(len(tmp)):
+                if tmp[i][0] == 0:
+                    remove.append(i)
+                    break
+                for j in range(i, len(tmp)):
+                    if tmp[i][0] <= tmp[j][0] * 0.7:
+                        break
+                    else:
+                        I = masks[tmp[i][1]] * masks[tmp[j][1]]
+                        U = masks[tmp[i][1]] + masks[tmp[j][1]] - I
+                        IoU = I.sum() / (U.sum() + 0.1)
+                        if IoU > 0.7:
+                            remove.append(i)
+                            break
+            remove = set(remove)
+            masks = masks[[i for i in range(len(tmp)) if i not in remove]]
+
+            # border and pseudo color
             border = self.getborder(masks).unsqueeze(0).unsqueeze(0)
             pseudocolor = self.getpseudocolor(masks).unsqueeze(0)
 
         size_ = (x_.shape[1], x_.shape[2])
-        border = torch.nn.functional.interpolate(border, size=size_)
+        border = torch.nn.functional.interpolate(border, size=size_, mode="bilinear")
         pseudocolor = torch.nn.functional.interpolate(pseudocolor, size=size_)
         return border[0][0], pseudocolor[0]
 
@@ -66,32 +95,7 @@ class SAMasInput:
         tmp, _ = tmp.max(0)
         return tmp
 
-    def getpseudocolor(self, masks, flag=False):
-        tmp = torch.nn.functional.max_pool2d(masks, kernel_size=2)
-        tmp = tmp.half().flatten(1)
-        with torch.no_grad():
-            intersectionM = tmp.unsqueeze(0) * tmp.unsqueeze(1)
-            unionM = tmp.unsqueeze(0) + tmp.unsqueeze(1) - intersectionM
-            intersectionM, unionM = intersectionM.sum(2).float(), unionM.sum(2).float()
-        IoU = intersectionM / (unionM + 0.001)
-        kept = []
-        for i in range(IoU.shape[0]):
-            l = [(IoU[i][j], j) for j in range(i + 1, IoU.shape[0])]
-            if l != [] and max(l)[0] > 0.6:
-                _, j = max(l)
-                masks[j] = torch.max(masks[j], masks[i])
-            else:
-                kept.append(i)
-
-        if len(kept) == IoU.shape[0] or flag:
-            return self.createpseudocolor(masks)
-        else:
-            return self.getpseudocolor(masks[kept], True)
-
-    def createpseudocolor(self, masks):
-        masks = 1 - torch.nn.functional.max_pool2d(
-            1 - masks, kernel_size=3, stride=1, padding=1
-        )
+    def getpseudocolor(self, masks):
         out = torch.zeros(3, 256, 256).cuda()
         for i in range(masks.shape[0]):
             tmp = torch.zeros(3, 256, 256).cuda()
@@ -108,7 +112,6 @@ if __name__ == "__main__":
     import PIL
     from PIL import Image
     import numpy
-    import torchvision
 
     tmp = PIL.Image.open("build/grosse.png")
     tmp = numpy.asarray(tmp.convert("RGB").copy())
