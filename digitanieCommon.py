@@ -1,19 +1,11 @@
-import PIL
-from PIL import Image
-import rasterio
 import numpy
 import torch
-import queue
-import threading
-import torchvision
 import skimage
+
 
 def numpyTOtorch(x):
     return torch.Tensor(numpy.transpose(x, axes=(2, 0, 1)))
 
-
-def minmax01(x):
-    return numpy.clip(x, 0, 1)
 
 def symetrie(x, y, ijk):
     i, j, k = ijk[0], ijk[1], ijk[2]
@@ -25,81 +17,103 @@ def symetrie(x, y, ijk):
         x, y = numpy.flip(x, axis=0), numpy.flip(y, axis=0)
     return x.copy(), y.copy()
 
+
 def confusion(y, z):
     cm = torch.zeros(2, 2).cuda()
     for a, b in [(0, 0), (0, 1), (1, 0), (1, 1)]:
         cm[a][b] = ((z == a).float() * (y == b).float()).sum()
-    
+
     accu = 100.0 * (cm[0][0] + cm[1][1]) / (torch.sum(cm) + 1)
     iou0 = 50.0 * cm[0][0] / (cm[0][0] + cm[1][0] + cm[0][1] + 1)
     iou1 = 50.0 * cm[1][1] / (cm[1][1] + cm[1][0] + cm[0][1] + 1)
     return cm, accu, iou0 + iou1
 
+
 def confusionInstance(y, z):
     assert len(y.shape) == 2 and len(z.shape) == 2
 
-    vtlabelmap, nbVT = skimage.measure.label(y, return_num=True)
-    predlabelmap, nbPRED = skimage.measure.label(z, return_num=True)
-    vtlabelmap = torch.Tensor(vtlabelmap).cuda()
-    predlabelmap = torch.Tensor(predlabelmap).cuda()
+    vtmap, nbVT = skimage.measure.label(y, return_num=True)
+    predmap, nbPRED = skimage.measure.label(z, return_num=True)
+    vtmap = torch.Tensor(vtmap).cuda() - 1
+    predmap = torch.Tensor(predmap).cuda() - 1
 
-    IoU = numpy.zeros((nbVT,nbPRED))
-    for i in range(nbVT):
-        for j in range(nbPRED):
-            I = (vtlabelmap==i).float()*(predlabelmap==j).float()
-            U = (vtlabelmap==i).float()+(predlabelmap==j).float()-I
-            IoU[i][j]=I/(U+1)
-            
+    # chatGPT acceleration d'une double boucle for
+    vt = vtmap.unsqueeze(0) == torch.arange(nbVT).cuda().unsqueeze(0).unsqueeze(0)
+    pred = predmap.unsqueeze(0) == torch.arange(nbPRED).cuda().unsqueeze(0).unsqueeze(0)
+    vt, pred = vt.flatten(1).unsqueeze(0), pred.flatten(1).unsqueeze(1)
+    I = pred.float() * vt.float()
+    U = pred.float() + vt.float() - I
+    I, U = I.sum(dim=2), U.sum(dim=2)
+    IoU = I / (U + 0.001)
 
-    vts, preds = list(range(1, nbVT + 1)), list(range(1, nbPRED + 1))
-    vtlabelmap, predlabelmap = sortmap(vtlabelmap), sortmap(predlabelmap)
+    # suppression des blobs qui débordent sur 2 batiments
+    for i in range(nbPRED):
+        if (IoU[i] != 0).float().sum() > 1:
+            IoU[i] = 0
 
-    tmp1, tmp2 = vtlabelmap.flatten(), predlabelmap.flatten()
-    allmatch = set(zip(list(tmp1), list(tmp2)))
+    # matching
+    L = [(-val, i, j) for (i, j), val in numpy.ndenumerate(IoU.cpu().numpy())]
+    L = sorted(L)
 
-    falsealarm = []
-    for j in preds:
-        if len([i for i in vts if (i, j) in allmatch]) != 1:
-            falsealarm.append(j)
-    falsealarm = set(falsealarm)
-    nbFalseAlarms = len(falsealarm)
-    preds = set([j for j in preds if j not in falsealarm])
-
-    goodmatch, goodbuilding, goodpreds = [], [], []
-    for i in vts:
-        tmp = [j for j in preds if (i, j) in allmatch]
-        if len(tmp) == 0:
+    I, J, G = set(), set(), []
+    for v, i, j in L:
+        if v < 0.05:
+            break
+        if i in I or j in J:
             continue
-        goodmatch.append((i, tmp[0]))
-        goodbuilding.append(i)
-        goodpreds.append(tmp[0])
+        G.append((i, j))
+        I.add(i)
+        J.add(j)
 
-    nbGOOD = len(goodpreds)
-    metric = torch.Tensor([nbGOOD, nbVT, nbPRED, nbFalseAlarms])
+    # vert = parfait - pixel d'un building capturé recouvert
+    # rouge = pire - pixel d'un building non capturé mais recouvert
+    # bleu = pixel d'un building capturé non recouvert
+    # blanc = pixel d'un building non capturé
+    # jaune = pred qui déborde
+    # orange = hallucination
 
-    goodbuilding = mapfiltered(vtlabelmap, set(goodbuilding))
-    goodpreds = mapfiltered(predlabelmap, set(goodpreds))
-    perfect = goodbuilding * goodpreds
-    vert = goodbuilding + goodpreds - perfect
-    vert = vert / 2 + perfect / 2
+    flag = torch.zeros(4, y.shape[0], y.shape[1]).cuda()
+    for i in range(nbPRED):
+        if i in I:
+            flag[0] += (predmap == i).float()
+        else:
+            flag[1] += (predmap == i).float()
+    for j in range(nbVT):
+        if j in J:
+            flag[2] += (vtmap == j).float()
+        else:
+            flag[3] += (vtmap == j).float()
 
-    rouge = (1 - goodpreds) * (z != 0)
-    bleu = (1 - goodbuilding) * (y != 0)
+    visu = torch.zeros(3, y.shape[0], y.shape[1]).cuda()
+    tmp = (flag[1] == 1).float() * (y == 0).float()
+    visu[0] += 255 * tmp
+    visu[1] += 165 * tmp
+    tmp = (flag[0] == 1).float() * (y == 0).float()
+    visu[0] += 255 * tmp
+    visu[1] += 255 * tmp
+    tmp = (z == 0).float() * (flag[3] == 1).float()
+    visu += tmp.unsequeeze(0) * 255
+    tmp = (flag[0] == 1).float() * (flag[2] == 1).float()
+    visu[1] += 255 * tmp
+    tmp = (z == 0).float() * (flag[2] == 1).float()
+    visu[2] += 255 * tmp
+    tmp = (flag[1] == 1).float() * (flag[3] == 1).float()
+    visu[0] += 255 * tmp
+    visu[1] *= 1 - tmp
+    visu[2] *= 1 - tmp
+    visu = torch.clamp(visu, 0, 255)
 
-    visu = numpy.stack([rouge, vert, bleu])
-    return metric, visu
-
-
-def perfinstance(metric):
-    nbGOOD, nbVT, nbPRED, nbFalseAlarms = metric
-    recall = nbGOOD / (nbVT + 0.00001)
-    precision = nbGOOD / (nbPRED + 0.00001)
+    recall = len(G) / (nbVT + 0.00001)
+    precision = len(G) / (nbPRED + 0.00001)
     gscore = recall * precision
-    return gscore, recall, precision
+    return gscore, recall, precision, visu, G
 
 
-
-
+import queue
+import threading
+import PIL
+from PIL import Image
+import rasterio
 
 
 class CropExtractor(threading.Thread):
@@ -251,28 +265,32 @@ def getDIGITANIE(flag, root="/scratchf/AI4GEO/DIGITANIE/", tile=256):
     return DIGITANIE(root, infos, flag, tile=tile)
 
 
-
-def computebuildingskeleton3D(y):
-    yy = -shortmaxpool(-y, size=1)
-    ske = [yy[i].cpu().numpy() for i in range(yy.shape[0])]
-    ske = [skimage.morphology.skeletonize(m) for m in ske]
-    ske = [torch.Tensor(m).cuda() for m in ske]
-    return torch.stack(ske, dim=0).cuda()
+import torchvision
+import samAsInput
 
 
 class GlobalLocal(torch.nn.Module):
     def __init__(self):
         super(GlobalLocal, self).__init__()
         self.backbone = torchvision.models.efficientnet_v2_l(weights="DEFAULT").features
-        self.compress = torch.nn.Conv2d(1280, 32, kernel_size=1)
-        self.classiflow = torch.nn.Conv2d(1280, 2, kernel_size=1)
 
-        self.local1 = torch.nn.Conv2d(3, 32, kernel_size=5, padding=2)
-        self.local2 = torch.nn.Conv2d(99, 32, kernel_size=5, padding=2)
-        self.local3 = torch.nn.Conv2d(99, 32, kernel_size=5, padding=2)
-        self.local4 = torch.nn.Conv2d(128, 32, kernel_size=3, padding=1)
-        self.local5 = torch.nn.Conv2d(128, 32, kernel_size=3, padding=1)
-        self.classifhigh = torch.nn.Conv2d(32, 2, kernel_size=1)
+        self.compress = torch.nn.Conv2d(1280, 32, kernel_size=1)
+
+        with torch.no_grad():
+            old = self.backend[0][0].weight.data.clone() / 2
+            self.backend[0][0] = torch.nn.Conv2d(
+                6, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False
+            )
+            tmp = torch.cat([old, old], dim=1)
+            self.backend[0][0].weight = torch.nn.Parameter(tmp)
+
+    def forward(self, x):
+        _, _, h, w = x.shape
+        x = ((x / 255) - 0.5) / 0.25
+        x = self.backend(x)
+        x = self.classif(x)
+        x = torch.nn.functional.interpolate(x, size=(h, w), mode="bilinear")
+        return x
 
     def forwardglobal(self, x):
         x = 2 * x - 1
@@ -318,9 +336,6 @@ class GlobalLocal(torch.nn.Module):
             f, size=(x.shape[2], x.shape[3]), mode="bilinear"
         )
         return self.forwardlocal(x, f) + z * 0.1
-
-
-
 
 
 def mapfiltered(spatialmap, setofvalue):
