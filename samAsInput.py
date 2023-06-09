@@ -115,5 +115,8 @@ if __name__ == "__main__":
     x = torch.Tensor(numpy.transpose(tmp, axes=(2, 0, 1)))
     border, pseudolabel = sam.applySAM(x)
 
-    torchvision.utils.save_image(border, "build/border.png")
-    torchvision.utils.save_image(pseudolabel / 255, "build/pseudolabel.png")
+    tmp = PIL.Image.fromarray(numpy.uint8(border.cpu().numpy() * 255))
+    tmp.save("build/border.png")
+    tmp = numpy.transpose(pseudolabel.cpu().numpy(), axes=(1, 2, 0))
+    tmp = PIL.Image.fromarray(numpy.uint8(tmp))
+    tmp.save("build/pseudolabel.png")
