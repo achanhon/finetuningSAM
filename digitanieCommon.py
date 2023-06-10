@@ -113,12 +113,12 @@ class GlobalLocal(torch.nn.Module):
         self.c5 = torch.nn.Conv2d(256, 2, kernel_size=3, padding=1)
 
         with torch.no_grad():
-            old = self.backend[0][0].weight.data.clone() / 2
-            self.backend[0][0] = torch.nn.Conv2d(
+            old = self.backbone[0][0].weight.data.clone() / 2
+            self.backbone[0][0] = torch.nn.Conv2d(
                 6, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False
             )
             tmp = torch.cat([old, old], dim=1)
-            self.backend[0][0].weight = torch.nn.Parameter(tmp)
+            self.backbone[0][0].weight = torch.nn.Parameter(tmp)
 
         self.lrelu = torch.nn.LeakyReLU(negative_slope=0.1, inplace=False)
 
@@ -127,7 +127,7 @@ class GlobalLocal(torch.nn.Module):
 
         x, mask = self.sam.applySAMmultiple(x)
 
-        x = ((x / 255) - 0.5) / 0.25
+        x = ((x / 255) - 0.5) / 0.5
         x = self.backbone(x)
         x = self.compress(x)
         x = torch.nn.functional.interpolate(x, size=(h, w), mode="bilinear")
@@ -142,7 +142,7 @@ class GlobalLocal(torch.nn.Module):
         x = self.lrelu(self.c3(xx))
         x = self.lrelu(self.c4(x))
         x = torch.cat([x, xx], dim=1)
-        return self.lrelu(self.c5(x))
+        return self.c5(x)
 
 
 import queue
@@ -176,7 +176,7 @@ class CropExtractorDigitanie(threading.Thread):
             r = numpy.clip(src.read(1) * 2, 0, 1)
             g = numpy.clip(src.read(2) * 2, 0, 1)
             b = numpy.clip(src.read(3) * 2, 0, 1)
-            x = numpy.stack([r, g, b], axis=0)
+            x = numpy.stack([r, g, b], axis=0) * 255
 
         y = PIL.Image.open(self.paths[i][1]).convert("RGB").copy()
         y = numpy.asarray(y)
@@ -273,3 +273,21 @@ def getDIGITANIE(flag, root="/scratchf/AI4GEO/DIGITANIE/", tile=512):
             paths.append((x, y))
 
     return CropExtractorDigitanie(flag, paths, tile=tile)
+
+
+if __name__ == "__main__":
+    import os
+
+    os.system("rm -r build")
+    os.system("mkdir build")
+
+    if True:
+        net = GlobalLocal()
+        net.eval()
+        net.cuda()
+        tmp = torch.rand(2, 3, 512, 512).cuda()
+        tmp[:, :, 200:300, 200:300] = 1
+        print(net(tmp).shape)
+
+    os.system("/d/achanhon/miniconda/bin/python -u train")
+    os.system("/d/achanhon/miniconda/bin/python -u test")

@@ -35,19 +35,19 @@ class SAMasInput:
             ]
         ).cuda()
 
-    def applySAMmultiple(self,x):
+    def applySAMmultiple(self, x):
         with torch.no_grad():
-            xc =torch.ones(x.shape[0],3,x.shape[2],x.shape[3])
-            xb =torch.ones(x.shape[0],1,x.shape[2],x.shape[3])
+            xc = torch.ones(x.shape[0], 3, x.shape[2], x.shape[3])
+            xb = torch.ones(x.shape[0], 1, x.shape[2], x.shape[3])
             for i in range(x.shape[0]):
-                b,c = self.applySAM(x[0])
-                xc[i]=c
-                xb[i]=b
-        return torch.cat([x,xb],dim=1),xb
+                b, c = self.applySAM(x[0])
+                xc[i] = c
+                xb[i] = b
+        return torch.cat([x, xc], dim=1), xb
 
     def applySAM(self, x_):
         tmp = torch.nn.functional.interpolate(
-            x_.unsqueeze(0), size=(256,256), mode="bilinear"
+            x_.unsqueeze(0), size=(256, 256), mode="bilinear"
         )
         x = {}
         x["image"] = tmp[0].cuda()
@@ -87,11 +87,14 @@ class SAMasInput:
         remove = set(remove)
         masks = masks[[i for i in range(len(tmp)) if i not in remove]]
 
+        size_ = (x_.shape[1], x_.shape[2])
+        if masks.shape[0] == 0:
+            return torch.zeros(size_), torch.zeros(x_.size)
+
         # border and pseudo color
         border = self.getborder(masks).unsqueeze(0).unsqueeze(0)
         pseudocolor = self.getpseudocolor(masks).unsqueeze(0)
 
-        size_ = (x_.shape[1], x_.shape[2])
         border = torch.nn.functional.interpolate(border, size=size_, mode="bilinear")
         pseudocolor = torch.nn.functional.interpolate(pseudocolor, size=size_)
         return border[0][0], pseudocolor[0]
@@ -122,10 +125,13 @@ if __name__ == "__main__":
     from PIL import Image
     import numpy
 
-    tmp = PIL.Image.open("build/grosse.png")
+    tmp = PIL.Image.open("/scratchf/miniworld/potsdam/train/0_x.png")
+    tmp.resize((512, 512))
+    tmp.save("build/orgin.png")
     tmp = numpy.asarray(tmp.convert("RGB").copy())
     x = torch.Tensor(numpy.transpose(tmp, axes=(2, 0, 1)))
-    border, pseudolabel = sam.applySAM(x)
+    with torch.no_grad():
+        border, pseudolabel = sam.applySAM(x)
 
     tmp = PIL.Image.fromarray(numpy.uint8(border.cpu().numpy() * 255))
     tmp.save("build/border.png")
