@@ -37,10 +37,10 @@ class SAMasInput:
 
     def applySAMmultiple(self, x):
         with torch.no_grad():
-            xc = torch.ones(x.shape[0], 3, x.shape[2], x.shape[3])
-            xb = torch.ones(x.shape[0], 1, x.shape[2], x.shape[3])
+            xc = torch.ones(x.shape[0], 3, x.shape[2], x.shape[3]).cuda()
+            xb = torch.ones(x.shape[0], 1, x.shape[2], x.shape[3]).cuda()
             for i in range(x.shape[0]):
-                b, c = self.applySAM(x[0])
+                b, c = self.applySAM(x[i])
                 xc[i] = c
                 xb[i] = b
         return torch.cat([x, xc], dim=1), xb
@@ -89,7 +89,7 @@ class SAMasInput:
 
         size_ = (x_.shape[1], x_.shape[2])
         if masks.shape[0] == 0:
-            return torch.zeros(size_), torch.zeros(x_.size)
+            return torch.zeros(size_).cuda(), torch.zeros(x_.shape).cuda()
 
         # border and pseudo color
         border = self.getborder(masks).unsqueeze(0).unsqueeze(0)

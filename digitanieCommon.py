@@ -191,7 +191,7 @@ class CropExtractorDigitanie(threading.Thread):
         assert self.isrunning
         return self.q.get(block=True)
 
-    def getBatch(self, batchsize):
+    def getBatch(self, batchsize=3):
         tilesize = self.tilesize
         x = torch.zeros(batchsize, 3, tilesize, tilesize)
         y = torch.zeros(batchsize, tilesize, tilesize)
@@ -199,7 +199,7 @@ class CropExtractorDigitanie(threading.Thread):
             x[i], y[i] = self.getCrop()
         return x, y
 
-    def symetrie(x, y):
+    def symetrie(self, x, y):
         if random.random() > 0.5:
             x[0] = numpy.transpose(x[0], axes=(1, 0))
             x[1] = numpy.transpose(x[1], axes=(1, 0))
@@ -228,8 +228,8 @@ class CropExtractorDigitanie(threading.Thread):
             for i in I:
                 image, label = self.getImageAndLabel(i, torchformat=False)
 
-                r = random.random() * 1500
-                c = random.random() * 1500
+                r = int(random.random() * 1500)
+                c = int(random.random() * 1500)
                 im = image[:, r : r + tilesize, c : c + tilesize]
                 mask = label[r : r + tilesize, c : c + tilesize]
 
@@ -239,7 +239,7 @@ class CropExtractorDigitanie(threading.Thread):
                     continue
 
                 x, y = self.symetrie(im.copy(), mask.copy())
-                x, y = torch.Tensor(x), torch.Tensor(y)
+                x, y = torch.Tensor(x.copy()), torch.Tensor(y.copy())
                 self.q.put((x, y), block=True)
 
 
@@ -272,7 +272,7 @@ def getDIGITANIE(flag, root="/scratchf/AI4GEO/DIGITANIE/", tile=512):
             y = root + city + "/COS9/" + city + "_" + str(i) + infos[city]["suffixvt"]
             paths.append((x, y))
 
-    return CropExtractorDigitanie(flag, paths, tile=tile)
+    return CropExtractorDigitanie(paths, flag, tile=tile)
 
 
 if __name__ == "__main__":
@@ -281,13 +281,35 @@ if __name__ == "__main__":
     os.system("rm -r build")
     os.system("mkdir build")
 
-    if True:
+    if False:
         net = GlobalLocal()
         net.eval()
         net.cuda()
         tmp = torch.rand(2, 3, 512, 512).cuda()
         tmp[:, :, 200:300, 200:300] = 1
         print(net(tmp).shape)
+        quit()
 
-    os.system("/d/achanhon/miniconda/bin/python -u train")
-    os.system("/d/achanhon/miniconda/bin/python -u test")
+    if False:
+        dataset = getDIGITANIE("all")
+        dataset.start()
+        x, _ = dataset.getBatch()
+        torchvision.utils.save_image(x / 255, "build/lol.png")
+        os._exit(0)
+
+    if False:
+        dataset = getDIGITANIE("all")
+        dataset.start()
+        x, _ = dataset.getBatch()
+
+        net = GlobalLocal()
+        net.eval()
+        net.cuda()
+
+        _, border = net.sam.applySAMmultiple(x.cuda())
+        torchvision.utils.save_image(x / 255, "build/x.png")
+        torchvision.utils.save_image(border, "build/z.png")
+        os._exit(0)
+
+    os.system("/d/achanhon/miniconda/bin/python -u digitanieTrain")
+    os.system("/d/achanhon/miniconda/bin/python -u digitanieTest")
