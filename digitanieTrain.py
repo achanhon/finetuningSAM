@@ -1,5 +1,6 @@
 import torch
 import digitanieCommon
+import os
 
 print("load data")
 dataset = digitanieCommon.getDIGITANIE("all")
