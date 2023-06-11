@@ -317,5 +317,5 @@ if __name__ == "__main__":
         torchvision.utils.save_image(border, "build/z.png")
         os._exit(0)
 
-    os.system("/d/achanhon/miniconda/bin/python -u digitanieTrain")
-    os.system("/d/achanhon/miniconda/bin/python -u digitanieTest")
+    os.system("/d/achanhon/miniconda3/bin/python -u digitanieTrain.py")
+    os.system("/d/achanhon/miniconda3/bin/python -u digitanieTest.py")

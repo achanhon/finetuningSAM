@@ -1,5 +1,5 @@
-import torch
 import digitanieCommon
+import torch
 import os
 
 print("load data")
@@ -26,7 +26,7 @@ for i in range(nbbatchs):
     x, y = dataset.getBatch()
     x, y = x.cuda(), y.cuda()
 
-    ybis = 1 - torch.nn.functional.max_pool2d(1 - y, kernel_size=7, padding=1, stride=3)
+    ybis = 1 - torch.nn.functional.max_pool2d(1 - y, kernel_size=7, padding=3, stride=1)
 
     z = net(x)
 

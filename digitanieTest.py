@@ -1,6 +1,6 @@
+import digitanieCommon
 import torch
 import torchvision
-import digitanieCommon
 import os
 
 print("load data")
