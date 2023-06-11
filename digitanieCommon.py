@@ -20,18 +20,25 @@ def perf(cm):
 def confusionInstance(y, z):
     assert len(y.shape) == 2 and len(z.shape) == 2
 
-    vtmap, nbVT = skimage.measure.label(y, return_num=True)
+    y_, z = y.cpu().numpy(), z.cpu().numpy()
+    vtmap, nbVT = skimage.measure.label(y_, return_num=True)
     predmap, nbPRED = skimage.measure.label(z, return_num=True)
     vtmap = torch.Tensor(vtmap).cuda() - 1
     predmap = torch.Tensor(predmap).cuda() - 1
 
     # chatGPT acceleration d'une double boucle for
-    vt = vtmap.unsqueeze(0) == torch.arange(nbVT).cuda().unsqueeze(0).unsqueeze(0)
-    pred = predmap.unsqueeze(0) == torch.arange(nbPRED).cuda().unsqueeze(0).unsqueeze(0)
-    vt, pred = vt.flatten(1).unsqueeze(0), pred.flatten(1).unsqueeze(1)
-    I = pred.float() * vt.float()
+    vtmap_, predmap_ = vtmap.flatten(), predmap.flatten()  # 512x512 -> 262144
+    # 1x262144 == nbVTx1 -> nbVTx262144
+    print(vtmap_.unsqueeze(0).shape)
+    print(torch.arange(nbVT).cuda().unsqueeze(-1).shape)
+    vt = vtmap_.unsqueeze(0) == torch.arange(nbVT).cuda().unsqueeze(-1)
+    # 1x262144 == nbPREDx1 -> nbbPREDx262144
+    pred = predmap_.unsqueeze(0) == torch.arange(nbPRED).cuda().unsqueeze(-1)
+    # 1xnbVTx262144, nbbPREDx1x262144
+    vt, pred = vt.unsqueeze(0), pred.unsqueeze(1)
+    I = pred.float() * vt.float()  # nbbPREDxnbVTx262144
     U = pred.float() + vt.float() - I
-    I, U = I.sum(dim=2), U.sum(dim=2)
+    I, U = I.sum(dim=2), U.sum(dim=2)  # nbbPREDxnbVT
     IoU = I / (U + 0.001)
 
     # suppression des blobs qui débordent sur 2 batiments
