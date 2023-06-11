@@ -26,20 +26,15 @@ def confusionInstance(y, z):
     vtmap = torch.Tensor(vtmap).cuda() - 1
     predmap = torch.Tensor(predmap).cuda() - 1
 
-    # chatGPT acceleration d'une double boucle for
-    vtmap_, predmap_ = vtmap.flatten(), predmap.flatten()  # 512x512 -> 262144
-    # 1x262144 == nbVTx1 -> nbVTx262144
-    print(vtmap_.unsqueeze(0).shape)
-    print(torch.arange(nbVT).cuda().unsqueeze(-1).shape)
-    vt = vtmap_.unsqueeze(0) == torch.arange(nbVT).cuda().unsqueeze(-1)
-    # 1x262144 == nbPREDx1 -> nbbPREDx262144
-    pred = predmap_.unsqueeze(0) == torch.arange(nbPRED).cuda().unsqueeze(-1)
-    # 1xnbVTx262144, nbbPREDx1x262144
-    vt, pred = vt.unsqueeze(0), pred.unsqueeze(1)
-    I = pred.float() * vt.float()  # nbbPREDxnbVTx262144
-    U = pred.float() + vt.float() - I
-    I, U = I.sum(dim=2), U.sum(dim=2)  # nbbPREDxnbVT
-    IoU = I / (U + 0.001)
+    #calcul des IoU
+    IoU = torch.zeros(nbPRED,nbVT)
+    for a in range(nbPRED):
+        pred = (predmap==a).float()
+        for b in range(nbVT):
+            vt = (vtmap==b).float()
+            I = pred * vt
+            U = pred + vt - I
+            IoU[a][b]=I.sum() / (U.sum() + 0.001)
 
     # suppression des blobs qui débordent sur 2 batiments
     for i in range(nbPRED):
