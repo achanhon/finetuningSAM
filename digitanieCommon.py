@@ -9,6 +9,7 @@ def confusion(y, z):
         cm[a][b] = ((z == a).float() * (y == b).float()).sum()
     return cm
 
+
 def perf(cm):
     accu = 100.0 * (cm[0][0] + cm[1][1]) / (torch.sum(cm) + 1)
     iou0 = 50.0 * cm[0][0] / (cm[0][0] + cm[1][0] + cm[0][1] + 1)
@@ -89,9 +90,10 @@ def confusionInstance(y, z):
     visu[1] *= 1 - tmp
     visu[2] *= 1 - tmp
     visu = torch.clamp(visu, 0, 255)
-    return len(G),nbVT,nbPRED,visu
+    return len(G), nbVT, nbPRED, visu
 
-def perfI(G,nbVT,nbPRED)
+
+def perfI(G, nbVT, nbPRED):
     recall = G / (nbVT + 0.00001)
     precision = G / (nbPRED + 0.00001)
     gscore = recall * precision
