@@ -34,13 +34,14 @@ with torch.no_grad():
         z = (z[0, 1, :, :] > z[0, 0, :, :]).float()
 
         cm += digitanieCommon.confusion(y, z)
-        g, vt, pred = digitanieCommon.confusionInstance(y, z)
+        g, vt, pred, visu = digitanieCommon.confusionInstance(y, z)
         good, nbVT, nbPred = good + g, nbVT + vt, nbPred + pred
 
         if True:
             torchvision.utils.save_image(x / 255, "build/" + str(i) + "_x.png")
             torchvision.utils.save_image(y, "build/" + str(i) + "_y.png")
             torchvision.utils.save_image(z, "build/" + str(i) + "_z.png")
+            torchvision.utils.save_image(visu / 255, "build/" + str(i) + "_v.png")
 
     print("perf=", digitanieCommon.perf(cm))
-    print("perfI=", digitanieCommon.perfI(cm))
+    print("perfI=", digitanieCommon.perfI(good, nbVT, nbPred))

@@ -20,21 +20,21 @@ def perf(cm):
 def confusionInstance(y, z):
     assert len(y.shape) == 2 and len(z.shape) == 2
 
-    y_, z = y.cpu().numpy(), z.cpu().numpy()
+    y_, z_ = y.cpu().numpy(), z.cpu().numpy()
     vtmap, nbVT = skimage.measure.label(y_, return_num=True)
-    predmap, nbPRED = skimage.measure.label(z, return_num=True)
+    predmap, nbPRED = skimage.measure.label(z_, return_num=True)
     vtmap = torch.Tensor(vtmap).cuda() - 1
     predmap = torch.Tensor(predmap).cuda() - 1
 
-    #calcul des IoU
-    IoU = torch.zeros(nbPRED,nbVT)
+    # calcul des IoU
+    IoU = torch.zeros(nbPRED, nbVT)
     for a in range(nbPRED):
-        pred = (predmap==a).float()
+        pred = (predmap == a).float()
         for b in range(nbVT):
-            vt = (vtmap==b).float()
+            vt = (vtmap == b).float()
             I = pred * vt
             U = pred + vt - I
-            IoU[a][b]=I.sum() / (U.sum() + 0.001)
+            IoU[a][b] = I.sum() / (U.sum() + 0.001)
 
     # suppression des blobs qui débordent sur 2 batiments
     for i in range(nbPRED):
@@ -82,7 +82,9 @@ def confusionInstance(y, z):
     visu[0] += 255 * tmp
     visu[1] += 255 * tmp
     tmp = (z == 0).float() * (flag[3] == 1).float()
-    visu += tmp.unsequeeze(0) * 255
+    visu[0] += 255 * tmp
+    visu[1] += 255 * tmp
+    visu[2] += 255 * tmp
     tmp = (flag[0] == 1).float() * (flag[2] == 1).float()
     visu[1] += 255 * tmp
     tmp = (z == 0).float() * (flag[2] == 1).float()
@@ -189,6 +191,10 @@ class CropExtractorDigitanie(threading.Thread):
         y = PIL.Image.open(self.paths[i][1]).convert("RGB").copy()
         y = numpy.asarray(y)
         y = numpy.uint8((y[:, :, 0] == 250) * (y[:, :, 1] == 50) * (y[:, :, 2] == 50))
+
+        if y.shape != (2048, 2048):
+            print(self.paths[i][0], y.shape)
+            y, x = y[0:2048, 0:2048], x[:, 0:2048, 0:2048]
 
         if torchformat:
             return torch.Tensor(x), torch.Tensor(y)
