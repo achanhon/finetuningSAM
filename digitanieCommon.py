@@ -193,7 +193,6 @@ class CropExtractorDigitanie(threading.Thread):
         y = numpy.uint8((y[:, :, 0] == 250) * (y[:, :, 1] == 50) * (y[:, :, 2] == 50))
 
         if y.shape != (2048, 2048):
-            print(self.paths[i][0], y.shape)
             y, x = y[0:2048, 0:2048], x[:, 0:2048, 0:2048]
 
         if torchformat:
