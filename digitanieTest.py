@@ -27,6 +27,7 @@ cm = torch.zeros((2, 2)).cuda()
 good, nbVT, nbPred = 0, 0, 0
 with torch.no_grad():
     for i in range(len(dataset.paths)):
+        print(i, "/", len(dataset.paths))
         x, y = dataset.getImageAndLabel(i)
         x, y = x.cuda(), y.cuda()
 
