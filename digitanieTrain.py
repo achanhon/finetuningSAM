@@ -4,7 +4,7 @@ import os
 
 print("load data")
 dataset = digitanieCommon.getDIGITANIE("all")
-net = digitanieCommon.GlobalLocal()
+net = digitanieCommon.EncoderONLY()
 net.eval()
 net.cuda()
 
@@ -19,7 +19,7 @@ optimizer = torch.optim.Adam(net.parameters(), lr=0.00001)
 printloss = torch.zeros(1).cuda()
 
 stats = torch.zeros((2, 2)).cuda()
-nbbatchs = 50000
+nbbatchs = 20000
 dataset.start()
 
 for i in range(nbbatchs):

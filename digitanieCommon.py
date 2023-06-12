@@ -108,6 +108,22 @@ import torchvision
 import samAsInput
 
 
+class EncoderONLY(torch.nn.Module):
+    def __init__(self):
+        super(EncoderONLY, self).__init__()
+        self.backbone = torchvision.models.efficientnet_v2_l(weights="DEFAULT").features
+        self.compress = torch.nn.Conv2d(1280, 2, kernel_size=1)
+
+    def forward(self, x):
+        _, _, h, w = x.shape
+
+        x = ((x / 255) - 0.5) / 0.5
+        x = self.backbone(x)
+        x = self.compress(x)
+        x = torch.nn.functional.interpolate(x, size=(h, w), mode="bilinear")
+        return x
+
+
 class GlobalLocal(torch.nn.Module):
     def __init__(self):
         super(GlobalLocal, self).__init__()
