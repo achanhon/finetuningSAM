@@ -47,7 +47,7 @@ def confusionInstance(y, z):
 
     I, J, G = set(), set(), []
     for v, i, j in L:
-        if v < 0.05:
+        if (-v) < 0.05:
             break
         if i in I or j in J:
             continue
