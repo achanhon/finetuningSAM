@@ -10,11 +10,7 @@ net.cuda()
 
 print("train")
 
-tmp = torch.Tensor([1.0, 10.0]).cuda()
-CE = torch.nn.CrossEntropyLoss(weight=tmp.clone())
-tmp = torch.Tensor([10.0, 1.0]).cuda()
-CEbis = torch.nn.CrossEntropyLoss(weight=tmp.clone())
-
+CE = torch.nn.CrossEntropyLoss(reduction="None")
 optimizer = torch.optim.Adam(net.parameters(), lr=0.00001)
 printloss = torch.zeros(1).cuda()
 
@@ -26,13 +22,12 @@ for i in range(nbbatchs):
     x, y = dataset.getBatch()
     x, y = x.cuda(), y.cuda()
 
-    ybis = 1 - torch.nn.functional.max_pool2d(1 - y, kernel_size=7, padding=3, stride=1)
-
     z = net(x)
 
     ce = CE(z, y.long())
-    cebis = CEbis(z, ybis.long())
-    loss = ce + cebis
+    ybis = 1 - torch.nn.functional.max_pool2d(1 - y, kernel_size=3, padding=1, stride=1)
+    ce = ce * (1 + 19.0 * (y == 1).float() * (ybis == 0).float())
+    loss = ce.sum()
 
     with torch.no_grad():
         printloss += loss.clone().detach()
