@@ -19,7 +19,7 @@ def largeforward(net, image, tilesize=512, stride=256):
     for row in range(0, image.shape[2] - tilesize + 1, stride):
         for col in range(0, image.shape[3] - tilesize + 1, stride):
             tmp = net(image[:, :, row : row + tilesize, col : col + tilesize])
-            pred[0, :, row : row + tilesize, col : col + tilesize] += tmp[0]
+            pred[0, :, row : row + tilesize, col : col + tilesize] += tmp[0,0:2]
     return pred
 
 
