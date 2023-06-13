@@ -4,7 +4,7 @@ import os
 
 print("load data")
 dataset = digitanieCommon.getDIGITANIE("even")
-net = digitanieCommon.Deeplab()
+net = digitanieCommon.FUSION()
 net.eval()
 net.cuda()
 

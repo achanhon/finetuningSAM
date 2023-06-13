@@ -109,12 +109,12 @@ import samAsInput
 
 
 class Deeplab(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, outS=2):
         super(Deeplab, self).__init__()
         self.backend = torchvision.models.segmentation.deeplabv3_resnet101(
             weights="DEFAULT"
         )
-        self.backend.classifier[4] = torch.nn.Conv2d(256, 16, kernel_size=1)
+        self.backend.classifier[4] = torch.nn.Conv2d(256, outS, kernel_size=1)
 
     def forward(self, x):
         return self.backend(x)["out"]
@@ -125,21 +125,21 @@ class FUSION(torch.nn.Module):
         super(FUSION, self).__init__()
         self.sam = samAsInput.SAMasInput()
 
-        self.net = Deeplab()
+        self.net = Deeplab(outS=16)
 
         self.c1 = torch.nn.Conv2d(50, 50, kernel_size=1)
         self.c2 = torch.nn.Conv2d(50, 50, kernel_size=7, padding=3)
         self.c3 = torch.nn.Conv2d(50, 50, kernel_size=1)
-        self.c4 = torch.nn.Conv2d(50, 50, kernel_size=5, padding=2)
-        self.c5 = torch.nn.Conv2d(100, 2, kernel_size=1)
+        self.c4 = torch.nn.Conv2d(50, 34, kernel_size=5, padding=2)
+        self.c5 = torch.nn.Conv2d(50, 2, kernel_size=1)
 
         with torch.no_grad():
-            old = self.net.backbone.conv1.weight.data.clone() / 2
-            self.net.backbone.conv1 = torch.nn.Conv2d(
+            old = self.net.backend.backbone.conv1.weight.data.clone() / 2
+            self.net.backend.backbone.conv1 = torch.nn.Conv2d(
                 6, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False
             )
             tmp = torch.cat([old, old], dim=1)
-            self.net.backbone.conv1.weight = torch.nn.Parameter(tmp)
+            self.net.backend.backbone.conv1.weight = torch.nn.Parameter(tmp)
 
         self.lrelu = torch.nn.LeakyReLU(negative_slope=0.1, inplace=False)
 
@@ -151,15 +151,15 @@ class FUSION(torch.nn.Module):
         x = ((x / 255) - 0.5) / 0.25
         x = self.net(x)
 
-        tmp = 10 * x - 9 * torch.nn.functional.max_pool2d(
+        xx = 10 * x - 9 * torch.nn.functional.max_pool2d(
             x, kernel_size=3, padding=1, stride=1
         )
-        xx = torch.cat([x, tmp, x * (1 - mask), mask, (1 - mask)], dim=1)
+        xx = torch.cat([x, xx, x * (1 - mask), mask, (1 - mask)], dim=1)
 
-        x = self.lrelu(self.c1(xx))
-        x = self.lrelu(self.c2(x))
-        x = self.lrelu(self.c3(x))
-        x = self.lrelu(self.c4(x))
+        xx = self.lrelu(self.c1(xx))
+        xx = self.lrelu(self.c2(xx))
+        xx = self.lrelu(self.c3(xx))
+        xx = self.lrelu(self.c4(xx))
         x = torch.cat([x, xx], dim=1)
         return self.c5(x)
 
