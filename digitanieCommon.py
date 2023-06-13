@@ -108,43 +108,38 @@ import torchvision
 import samAsInput
 
 
-class EncoderONLY(torch.nn.Module):
+class Deeplab(torch.nn.Module):
     def __init__(self):
-        super(EncoderONLY, self).__init__()
-        self.backbone = torchvision.models.efficientnet_v2_l(weights="DEFAULT").features
-        self.compress = torch.nn.Conv2d(1280, 2, kernel_size=1)
+        super(Deeplab, self).__init__()
+        self.backend = torchvision.models.segmentation.deeplabv3_resnet101(
+            weights="DEFAULT"
+        )
+        self.backend.classifier[4] = torch.nn.Conv2d(256, 16, kernel_size=1)
 
     def forward(self, x):
-        _, _, h, w = x.shape
-
-        x = ((x / 255) - 0.5) / 0.5
-        x = self.backbone(x)
-        x = self.compress(x)
-        x = torch.nn.functional.interpolate(x, size=(h, w), mode="bilinear")
-        return x
+        return self.backend(x)["out"]
 
 
-class GlobalLocal(torch.nn.Module):
+class FUSION(torch.nn.Module):
     def __init__(self):
-        super(GlobalLocal, self).__init__()
+        super(FUSION, self).__init__()
         self.sam = samAsInput.SAMasInput()
 
-        self.backbone = torchvision.models.efficientnet_v2_l(weights="DEFAULT").features
-        self.compress = torch.nn.Conv2d(1280, 32, kernel_size=1)
+        self.net = Deeplab()
 
-        self.c1 = torch.nn.Conv2d(98, 64, kernel_size=7, padding=3)
-        self.c2 = torch.nn.Conv2d(64, 128, kernel_size=1)
-        self.c3 = torch.nn.Conv2d(128, 64, kernel_size=5, padding=2)
-        self.c4 = torch.nn.Conv2d(64, 128, kernel_size=1)
-        self.c5 = torch.nn.Conv2d(256, 2, kernel_size=3, padding=1)
+        self.c1 = torch.nn.Conv2d(50, 50, kernel_size=1)
+        self.c2 = torch.nn.Conv2d(50, 50, kernel_size=7, padding=3)
+        self.c3 = torch.nn.Conv2d(50, 50, kernel_size=1)
+        self.c4 = torch.nn.Conv2d(50, 50, kernel_size=5, padding=2)
+        self.c5 = torch.nn.Conv2d(100, 2, kernel_size=1)
 
         with torch.no_grad():
-            old = self.backbone[0][0].weight.data.clone() / 2
-            self.backbone[0][0] = torch.nn.Conv2d(
-                6, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False
+            old = self.net.backbone.conv1.weight.data.clone() / 2
+            self.net.backbone.conv1 = torch.nn.Conv2d(
+                6, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False
             )
             tmp = torch.cat([old, old], dim=1)
-            self.backbone[0][0].weight = torch.nn.Parameter(tmp)
+            self.net.backbone.conv1.weight = torch.nn.Parameter(tmp)
 
         self.lrelu = torch.nn.LeakyReLU(negative_slope=0.1, inplace=False)
 
@@ -153,19 +148,17 @@ class GlobalLocal(torch.nn.Module):
 
         x, mask = self.sam.applySAMmultiple(x)
 
-        x = ((x / 255) - 0.5) / 0.5
-        x = self.backbone(x)
-        x = self.compress(x)
-        x = torch.nn.functional.interpolate(x, size=(h, w), mode="bilinear")
+        x = ((x / 255) - 0.5) / 0.25
+        x = self.net(x)
 
         tmp = 10 * x - 9 * torch.nn.functional.max_pool2d(
             x, kernel_size=3, padding=1, stride=1
         )
-        x = torch.cat([x, tmp, x * (1 - mask), mask, (1 - mask)], dim=1)
+        xx = torch.cat([x, tmp, x * (1 - mask), mask, (1 - mask)], dim=1)
 
-        x = self.lrelu(self.c1(x))
-        xx = self.lrelu(self.c2(x))
-        x = self.lrelu(self.c3(xx))
+        x = self.lrelu(self.c1(xx))
+        x = self.lrelu(self.c2(x))
+        x = self.lrelu(self.c3(x))
         x = self.lrelu(self.c4(x))
         x = torch.cat([x, xx], dim=1)
         return self.c5(x)

@@ -3,8 +3,8 @@ import torch
 import os
 
 print("load data")
-dataset = digitanieCommon.getDIGITANIE("all")
-net = digitanieCommon.EncoderONLY()
+dataset = digitanieCommon.getDIGITANIE("even")
+net = digitanieCommon.Deeplab()
 net.eval()
 net.cuda()
 
