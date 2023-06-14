@@ -4,7 +4,11 @@ import os
 
 print("load data")
 dataset = digitanieCommon.getDIGITANIE("even")
-net = digitanieCommon.Deeplab()
+# net = digitanieCommon.Deeplab()
+# perf= (tensor(92.3988, device='cuda:0'), tensor(75.0972, device='cuda:0'))
+# perfI= (0.413362199658613, 0.7784599551437283, 0.530999953083384)
+# on retrouve enfin un truc normal
+net = digitanieCommon.FUSION()
 print("deeplab")
 net.eval()
 net.cuda()
