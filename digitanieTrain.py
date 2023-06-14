@@ -4,7 +4,8 @@ import os
 
 print("load data")
 dataset = digitanieCommon.getDIGITANIE("even")
-net = digitanieCommon.FUSION()
+net = digitanieCommon.Deeplab()
+print("deeplab")
 net.eval()
 net.cuda()
 
@@ -15,7 +16,7 @@ optimizer = torch.optim.Adam(net.parameters(), lr=0.00001)
 printloss = torch.zeros(1).cuda()
 
 stats = torch.zeros((2, 2)).cuda()
-nbbatchs = 20000
+nbbatchs = 30000
 dataset.start()
 
 for i in range(nbbatchs):
@@ -25,8 +26,8 @@ for i in range(nbbatchs):
     z = net(x)
 
     ce = CE(z, y.long())
-    ybis = 1 - torch.nn.functional.max_pool2d(1 - y, kernel_size=3, padding=1, stride=1)
-    ce = ce * (1 + 19.0 * (y == 1).float() * (ybis == 0).float())
+    ybis = torch.nn.functional.max_pool2d(y, kernel_size=3, padding=1, stride=1)
+    ce = ce * (1 + 19.0 * (y == 0).float() * (ybis == 1).float())
     loss = ce.mean()
 
     with torch.no_grad():

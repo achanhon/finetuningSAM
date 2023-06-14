@@ -213,7 +213,7 @@ class CropExtractorDigitanie(threading.Thread):
         assert self.isrunning
         return self.q.get(block=True)
 
-    def getBatch(self, batchsize=3):
+    def getBatch(self, batchsize=5):
         tilesize = self.tilesize
         x = torch.zeros(batchsize, 3, tilesize, tilesize)
         y = torch.zeros(batchsize, tilesize, tilesize)
