@@ -45,7 +45,7 @@ class SAMasInput:
                 xb[i] = b
         return torch.cat([x, xc], dim=1), xb
 
-    def applySAM(self, x_):
+    def applySAM(self, x_, debug=False):
         tmp = torch.nn.functional.interpolate(
             x_.unsqueeze(0), size=(256, 256), mode="bilinear"
         )
@@ -97,13 +97,16 @@ class SAMasInput:
 
         border = torch.nn.functional.interpolate(border, size=size_, mode="bilinear")
         pseudocolor = torch.nn.functional.interpolate(pseudocolor, size=size_)
-        return border[0][0], pseudocolor[0]
+        if debug:
+            masks = torch.stack(masks, dim=0).float()
+            masks = torch.nn.functional.interpolate(masks, size=size_)
+            return masks
+        else:
+            return border[0][0], pseudocolor[0]
 
     def getborder(self, masks):
-        tmp = 1 - torch.nn.functional.max_pool2d(
-            1 - masks, kernel_size=3, stride=1, padding=1
-        )
-        tmp = (tmp == 0).float() * (masks == 1).float()
+        tmp = torch.nn.functional.max_pool2d(masks, kernel_size=3, stride=1, padding=1)
+        tmp = (tmp == 1).float() * (masks == 0).float()
         tmp, _ = tmp.max(0)
         return tmp
 
