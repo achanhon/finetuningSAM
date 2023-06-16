@@ -144,9 +144,13 @@ class FUSION(torch.nn.Module):
         self.lrelu = torch.nn.LeakyReLU(negative_slope=0.1, inplace=False)
 
     def forward(self, x):
-        _, _, h, w = x.shape
+        B, _, h, w = x.shape
 
-        x, mask = self.sam.applySAMmultiple(x)
+        _, mask = self.sam.applySAMmultiple(x)
+
+        tmpm = x.mean(dim=1).unsqueeze(1)
+        tmp1 = torch.ones(B, 1, h, w).cuda() * 255
+        x = torch.cat([x, mask * 255, tmpm, tmp1], dim=1)
 
         x = ((x / 255) - 0.5) / 0.25
         x = self.net(x)
