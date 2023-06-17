@@ -57,8 +57,8 @@ with torch.no_grad():
             I.add(i)
             J.add(j)
 
-        if I == []:
-            z = torch.zeros(y.shape)
+        if list(I) == []:
+            z = torch.zeros(y.shape).cuda()
         else:
             z = masks[list(I)].max(0)
         # vert = parfait - pixel d'un building capturé recouvert
