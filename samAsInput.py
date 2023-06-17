@@ -89,7 +89,10 @@ class SAMasInput:
 
         size_ = (x_.shape[1], x_.shape[2])
         if masks.shape[0] == 0:
-            return torch.zeros(size_).cuda(), torch.zeros(x_.shape).cuda()
+            if debug:
+                return torch.zeros(x_.shape)
+            else:
+                return torch.zeros(size_).cuda(), torch.zeros(x_.shape).cuda()
 
         # border and pseudo color
         border = self.getborder(masks).unsqueeze(0).unsqueeze(0)
