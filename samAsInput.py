@@ -101,9 +101,8 @@ class SAMasInput:
         border = torch.nn.functional.interpolate(border, size=size_, mode="bilinear")
         pseudocolor = torch.nn.functional.interpolate(pseudocolor, size=size_)
         if debug:
-            masks = torch.stack(masks, dim=0).float()
-            masks = torch.nn.functional.interpolate(masks, size=size_)
-            return masks
+            masks = torch.nn.functional.interpolate(masks.unsqueeze(0), size=size_)
+            return masks[0]
         else:
             return border[0][0], pseudocolor[0]
 

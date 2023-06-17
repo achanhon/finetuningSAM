@@ -3,6 +3,7 @@ import samAsInput
 import torch
 import torchvision
 import skimage
+import numpy
 
 
 print("load data")
@@ -56,6 +57,10 @@ with torch.no_grad():
             I.add(i)
             J.add(j)
 
+        if I == []:
+            z = torch.zeros(y.shape)
+        else:
+            z = masks[list(I)].max(0)
         # vert = parfait - pixel d'un building capturé recouvert
         # rouge = pire - pixel d'un building non capturé mais recouvert
         # bleu = pixel d'un building capturé non recouvert
