@@ -11,6 +11,9 @@ dataset = digitanieCommon.getDIGITANIE("even")
 #
 # première version de fusion seulement à 39
 # => on vire les pseudo couleur et on met des masques sur les bords externes plutôt qu'interne
+# => perf= (tensor(91.5709, device='cuda:0'), tensor(72.1169, device='cuda:0'))
+# perfI= (0.4076290940465618, 0.7571257071661377, 0.5383902437711243)
+# qualitativement des résultats bien paraissent cependant très bien (potentiellement, il faut un petit post traitement - mais brutalement ben c'est pas mieux :-( )
 net = digitanieCommon.FUSION()
 
 print("deeplab")
