@@ -23,7 +23,7 @@ with torch.no_grad():
         vtmap, nbVT = skimage.measure.label(y.cpu().numpy(), return_num=True)
         vtmap = torch.Tensor(vtmap).cuda() - 1
 
-        masks = sam.applySAM(x, True)[0]
+        masks = sam.applySAM(x, True)
         print("??",masks.shape)
 
         # assuming a perfect classifier filter the masks that intercept no building at all
