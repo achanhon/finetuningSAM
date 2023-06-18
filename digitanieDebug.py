@@ -122,4 +122,8 @@ with torch.no_grad():
         if True:
             torchvision.utils.save_image(x / 255, "build/" + str(i) + "_x.png")
             torchvision.utils.save_image(y, "build/" + str(i) + "_y.png")
-           
+            torchvision.utils.save_image(z, "build/" + str(i) + "_z.png")
+            torchvision.utils.save_image(visu / 255, "build/" + str(i) + "_v.png")
+
+    print(good, nbVTs, nbPred)
+    print("sam + perfect classifier perfI=", digitanieCommon.perfI(good, nbVT, nbPred))

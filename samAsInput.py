@@ -129,12 +129,24 @@ if __name__ == "__main__":
     import PIL
     from PIL import Image
     import numpy
+    import rasterio
+    import os
 
-    tmp = PIL.Image.open("/scratchf/miniworld/potsdam/train/0_x.png")
-    tmp.resize((512, 512))
-    tmp.save("build/orgin.png")
-    tmp = numpy.asarray(tmp.convert("RGB").copy())
-    x = torch.Tensor(numpy.transpose(tmp, axes=(2, 0, 1)))
+    os.system("rm -r build")
+    os.system("mkdir build")
+
+    with rasterio.open(
+        "/scratchf/AI4GEO/DIGITANIE/Arcachon/Arcachon_EPSG32630_4.tif"
+    ) as src:
+        r = numpy.clip(src.read(1) * 2, 0, 1)
+        g = numpy.clip(src.read(2) * 2, 0, 1)
+        b = numpy.clip(src.read(3) * 2, 0, 1)
+        x = numpy.stack([r, g, b], axis=0) * 255
+        tmp = numpy.stack([r, g, b], axis=-1) * 255
+
+    tmp = PIL.Image.fromarray(numpy.uint8(tmp))
+    tmp.save("build/origine.png")
+    x = torch.Tensor(x)
     with torch.no_grad():
         border, pseudolabel = sam.applySAM(x)
 
