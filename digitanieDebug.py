@@ -24,7 +24,14 @@ with torch.no_grad():
         vtmap = torch.Tensor(vtmap).cuda() - 1
 
         masks = sam.applySAM(x, True)[0]
+        print("??",masks.shape)
 
+        # assuming a perfect classifier filter the masks that intercept no building at all
+        I = [i for i in range(masks.shape[0]) if (masks[i] * y).sum() != 0]
+        masks = masks[I]
+        print(masks.shape)
+
+        # IoU with vtmap
         IoU = torch.zeros(masks.shape[0], nbVT)
         for a in range(masks.shape[0]):
             for b in range(nbVT):
@@ -33,15 +40,13 @@ with torch.no_grad():
                 U = masks[a] + vt - I
                 IoU[a][b] = I.sum() / (U.sum() + 0.001)
 
-        # assuming a perfect classifier filter the masks
-        I = [i for i in range(IoU.shape[0]) if IoU[i].sum() != 0]
-        masks = masks[I]
-        IoU = IoU[I]
-
-        # still masks could overlap multiple area
+        # remove masks which overlap multiple area
+        I = []
         for i in range(masks.shape[0]):
             if (IoU[i] != 0).float().sum() > 1:
                 IoU[i] = 0
+                I.append(i)
+        print("remove", len(I))
 
         # matching
         L = [(-val, i, j) for (i, j), val in numpy.ndenumerate(IoU.cpu().numpy())]
@@ -103,11 +108,13 @@ with torch.no_grad():
 
         # return normal function
         good, nbVTs, nbPred = good + len(G), nbVTs + nbVT, nbPred + IoU.shape[0]
+        print(good, nbVTs, nbPred)
 
-        if False:
+        if True:
             torchvision.utils.save_image(x / 255, "build/" + str(i) + "_x.png")
             torchvision.utils.save_image(y, "build/" + str(i) + "_y.png")
             torchvision.utils.save_image(z, "build/" + str(i) + "_z.png")
             torchvision.utils.save_image(visu / 255, "build/" + str(i) + "_v.png")
 
+    print(good, nbVTs, nbPred)
     print("sam + perfect classifier perfI=", digitanieCommon.perfI(good, nbVT, nbPred))
