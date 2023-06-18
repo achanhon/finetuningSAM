@@ -90,7 +90,7 @@ class SAMasInput:
         size_ = (x_.shape[1], x_.shape[2])
         if masks.shape[0] == 0:
             if debug:
-                return torch.zeros(x_.shape)
+                return torch.zeros(x_.shape).cuda()
             else:
                 return torch.zeros(size_).cuda(), torch.zeros(x_.shape).cuda()
 
