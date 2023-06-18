@@ -24,12 +24,25 @@ with torch.no_grad():
         vtmap = torch.Tensor(vtmap).cuda() - 1
 
         masks = sam.applySAM(x, True)
-        print("??",masks.shape)
 
         # assuming a perfect classifier filter the masks that intercept no building at all
         I = [i for i in range(masks.shape[0]) if (masks[i] * y).sum() != 0]
+        I = [i for i in I if masks[i].sum() < 400]
         masks = masks[I]
-        print(masks.shape)
+
+        """
+        I = []
+        for i in range(masks.shape[0]):
+            tmp = (masks[i] * y).sum() / masks[i].sum()
+            if tmp > 0.6:
+                I.append(i)
+        masks = masks[I]
+        """
+
+        if masks.shape[0] == 0:
+            z = torch.zeros(y.shape).cuda()
+        else:
+            z, _ = masks.max(0)
 
         # IoU with vtmap
         IoU = torch.zeros(masks.shape[0], nbVT)
@@ -62,10 +75,6 @@ with torch.no_grad():
             I.add(i)
             J.add(j)
 
-        if list(I) == []:
-            z = torch.zeros(y.shape).cuda()
-        else:
-            z = masks[list(I)].max(0)
         # vert = parfait - pixel d'un building capturé recouvert
         # rouge = pire - pixel d'un building non capturé mais recouvert
         # bleu = pixel d'un building capturé non recouvert
@@ -113,8 +122,4 @@ with torch.no_grad():
         if True:
             torchvision.utils.save_image(x / 255, "build/" + str(i) + "_x.png")
             torchvision.utils.save_image(y, "build/" + str(i) + "_y.png")
-            torchvision.utils.save_image(z, "build/" + str(i) + "_z.png")
-            torchvision.utils.save_image(visu / 255, "build/" + str(i) + "_v.png")
-
-    print(good, nbVTs, nbPred)
-    print("sam + perfect classifier perfI=", digitanieCommon.perfI(good, nbVT, nbPred))
+           

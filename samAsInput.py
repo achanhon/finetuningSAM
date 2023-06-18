@@ -60,7 +60,6 @@ class SAMasInput:
         # get the largest mask for each point
         masks, _ = masks.max(1)
         masks = (masks > 0).float()
-        print("wtf", masks.shape)
 
         # erosion
         masks = 1 - torch.nn.functional.max_pool2d(
@@ -87,7 +86,6 @@ class SAMasInput:
                         break
         remove = set(remove)
         masks = masks[[i for i in range(len(tmp)) if i not in remove]]
-        print("wtf2", masks.shape)
 
         size_ = (x_.shape[1], x_.shape[2])
         if masks.shape[0] == 0:
@@ -102,10 +100,8 @@ class SAMasInput:
 
         border = torch.nn.functional.interpolate(border, size=size_, mode="bilinear")
         pseudocolor = torch.nn.functional.interpolate(pseudocolor, size=size_)
-        print("wtf2", masks.shape)
         if debug:
             masks = torch.nn.functional.interpolate(masks.unsqueeze(0), size=size_)
-            print("wtf3", masks[0].shape)
             return masks[0]
         else:
             return border[0][0], pseudocolor[0]
