@@ -36,40 +36,79 @@ class SAMwithoutResizing:
         ).cuda()
 
     def applySAMmultiple(self, x):
-        b, tmp, w, h = x.shape
-        assert tmp == 3
-        with torch.no_grad():
-            masks = torch.zeros(b, 1, w, h).cuda()
-            nbM = torch.zeros(b).cuda()
-            for i in range(b):
-                nbM[i], masks[i] = self.applySAM(x[i])
+        b, _, h,w = x.shape
+        W,H = (w//256)*256+256,(h//256)*256+256
+        
+        x = torch.nn.functional.interpolate(            x, size=(H, W), mode="bilinear"        )
+    
+        masks = torch.zeros(b, 1, w, h).cuda()
+        nbM = torch.zeros(b).cuda()
+        for i in range(b):
+            nbM[i], masks[i] = self.applySAM(x[i])
+        masks = torch.nn.functional.interpolate(            masks, size=(h, w), mode="nearest"        )
 
-            colorM = torch.zeros(b, 3, w, h).cuda()
-            for i in range(b):
-                for j in range(nbM[i]):
-                    colorM[i] += self.palette[j] * (masks[i] == j).float()
+        colorM = torch.zeros(b, 3, w, h).cuda()
+        for i in range(b):
+            for j in range(nbM[i]):
+                colorM[i] += self.palette[j] * (masks[i] == j).float()
         return nbM, masks, colorM
 
-    def applySAM(self, x_, debug=False):
-        tmp = torch.nn.functional.interpolate(
-            x_.unsqueeze(0), size=(256, 256), mode="bilinear"
-        )
+    def match(self,mask,p,I):
+        p = p[I]
+        return mask[p[:,0],p[:,1]].sum()>=1
+
+    def filteringMasks_(self,masks,grid,merged):
+        for i in range(masks.shape[0]):
+            for j in range(i+1,masks.shape[0]):
+                if self.match(masks[i],grid,merged[j]) and self.match(masks[j],grid,merged[i]):
+                    merged[i]=merged[i]+merged[j]
+                    del merged[j]
+                    masks[i] = torch.clamp(masks[i]+masks[j],0,1)
+                    del masks[j]
+                    return self.filteringMasks_(masks,grid,merged)
+
+        return masks,grid,merged
+
+    def filteringMask(self,masks,grid):
+        assert masks.shape[0]==grid.shape[0]
+        merged = [[i] for i in masks.shape[0]]
+        return self.filteringMask(masks,grid,merged)
+    
+
+    def basicSAM(self,x_):
+        assert x.shape==(3,256,256)
         x = {}
-        x["image"] = tmp[0].cuda()
+        x["image"] = x_
         x["original_size"] = (256, 256)
         x["point_coords"] = self.magrille
         x["point_labels"] = self.magrilleL
 
-        masks = self.sam([x], False)[0]["masks"]
-
-        # get the largest mask for each point
+        with torch.no_grad():
+            masks = self.sam([x], False)[0]["masks"]
+            
+        #take the largest
         masks, _ = masks.max(1)
         masks = (masks > 0).float()
-
-        # erosion
+    
+        #erode
         masks = 1 - torch.nn.functional.max_pool2d(
             1 - masks, kernel_size=3, stride=1, padding=1
         )
+
+        #filter
+        return self.filteringMask(masks,self.magrille)
+
+
+
+    def applySAM(self, x_):
+        _,H,W = x_.shape
+
+        largeMasks,largegrid,largeMerged = [],[],[]
+        for w in range(0,W-256,256):
+            for h in range(0,H-256,256):
+                masks,grid,merged = self.basicSAM(x[:,h:h+256,w:w+256])
+
+       
 
         # NMS
         tmp = [(masks[i].sum(), i) for i in range(masks.shape[0])]
