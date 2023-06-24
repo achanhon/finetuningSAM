@@ -8,14 +8,11 @@ def computeDistance(P,Q):
     D = (P - Q) ** 2  # |P|x|Q|x2
     return D.sum(2)  # |P|x|Q|
 
-def computeDistanceToCloud(P,Q,I):
-    DC = torch.zeros(P.shape[0],len(Qs))
-    for i,Q in enumerate(Qs):
-        D = computeDistance(P,Q)
-        D,_ = D.min(1)
-        DC[:,i] = D
-    _, I = DC.min(1)
-    return I 
+def nearestCloud(P,Q,I):
+    P,Q = P.unsqueeze(0),Q.unsqueeze(1)
+    D = (P - Q) ** 2
+    _,D = D.min(1)
+    return I[D]
 
 
 class SAMwithoutResizing:
@@ -36,14 +33,14 @@ class SAMwithoutResizing:
             self.magrille[i][0][1] = col
             self.magrilleL[i][0] = i
 
-        self.allpixels = []
+        self.allpixels256 = []
         for row in range(256):
             for col in range(256):
                 tmp = torch.zeros(1,2)
                 tmp[0][0]=row
                 tmp[0][1]=col
                 self.allpixels.append(tmp)
-        self.allpixels = torch.cat(self.allpixels,dim=0)
+        self.allpixels256 = torch.cat(self.allpixels256,dim=0)
 
         self.palette = torch.Tensor(
             [
@@ -106,14 +103,19 @@ class SAMwithoutResizing:
     def applySAM256(self,x):
         if len(x.shape==3):
             masks = self.rawSAM(x)
-            masks = self.mergingMasks(masks)
-
-            self.all
-
+            _,centers = self.mergingMasks(masks)
+            I = []
+            for i in range(masks.shape[0]):
+                I.append(torch.ones(centers[i].shape[0])*i)
+            I = torch.cat(I,dim=0)
+            centers = torch.cat(centers,dim=0)
+            J = nearestCloud(self.allpixels256,centers,I)
+            out = torch.zeros(256,256)
+            out[self.allpixels256[:,0],self.allpixels256[:,1]]=J
+            return out
         else:
-            out = []
-            for i in range(x.shape[0])
-    
+            
+
 
     def applySAMmultiple(self, x):
         b, _, h, w = x.shape
