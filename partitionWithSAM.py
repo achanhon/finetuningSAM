@@ -18,8 +18,8 @@ def computeDistance(P, Q):
 
 
 def nearestCloud(P, Q, I):
-    P, Q = P.unsqueeze(0), Q.unsqueeze(1)
-    D = (P - Q) ** 2
+    print(P.shape,Q.shape)
+    D = computeDistance(P,Q)
     _, D = D.min(1)
     return I[D]
 
