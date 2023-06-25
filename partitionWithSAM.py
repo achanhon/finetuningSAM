@@ -75,6 +75,7 @@ class PartitionSAM:
             return m >= 0.6 * centers.shape[1]
 
     def mergingMasks_(self, masks, centers):
+        print("nb masks", masks.shape[0])
         for i in range(masks.shape[0]):
             for j in range(i + 1, masks.shape[0]):
                 a = self.intersectMaskCenters(masks[i], centers[j])
