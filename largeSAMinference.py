@@ -2,16 +2,17 @@ import torch
 import segment_anything
 
 
-def computeDistance(P,Q):
+def computeDistance(P, Q):
     # |P|x2 and |Q|x2
-    P,Q = P.unsqueeze(0),Q.unsqueeze(1) #1x|P|x2 and |Q|x1x2
+    P, Q = P.unsqueeze(0), Q.unsqueeze(1)  # 1x|P|x2 and |Q|x1x2
     D = (P - Q) ** 2  # |P|x|Q|x2
     return D.sum(2)  # |P|x|Q|
 
-def nearestCloud(P,Q,I):
-    P,Q = P.unsqueeze(0),Q.unsqueeze(1)
+
+def nearestCloud(P, Q, I):
+    P, Q = P.unsqueeze(0), Q.unsqueeze(1)
     D = (P - Q) ** 2
-    _,D = D.min(1)
+    _, D = D.min(1)
     return I[D]
 
 
@@ -33,31 +34,7 @@ class SAMwithoutResizing:
             self.magrille[i][0][1] = col
             self.magrilleL[i][0] = i
 
-        self.allpixels256 = []
-        for row in range(256):
-            for col in range(256):
-                tmp = torch.zeros(1,2)
-                tmp[0][0]=row
-                tmp[0][1]=col
-                self.allpixels.append(tmp)
-        self.allpixels256 = torch.cat(self.allpixels256,dim=0)
-
-        self.palette = torch.Tensor(
-            [
-                [255.0, 0.0, 0.0],
-                [0.0, 255.0, 0.0],
-                [0.0, 0.0, 255.0],
-                [109.0, 98.0, 188.0],
-                [230.0, 251.0, 148.0],
-                [5.0, 18.0, 230.0],
-                [163.0, 38.0, 214.0],
-                [173.0, 142.0, 45.0],
-                [95.0, 19.0, 120.0],
-                [0.0, 0.0, 0.0],
-            ]
-        ).cuda()
-
-    def rawSAM(self,x_):
+    def rawSAM(self, x_):
         assert x_.shape == (3, 256, 256)
         x = {}
         x["image"] = x_.cuda()
@@ -79,15 +56,19 @@ class SAMwithoutResizing:
         return masks
 
     def intersectMaskCenters(self, mask, centers):
-        return mask[centers[:, 0], centers[:, 1]].sum() >= 1
+        m = mask[centers[:, 0], centers[:, 1]].sum()
+        if centers.shape[0] <= 2:
+            return m >= 1
+        else:
+            return m >= 0.6 * centers.shape[1]
 
     def mergingMasks_(self, masks, centers):
         for i in range(masks.shape[0]):
             for j in range(i + 1, masks.shape[0]):
                 a = self.intersectMaskCenters(masks[i], centers[j])
-                b = self.intersectMaskCenters(                    masks[j],centers[i]              )
+                b = self.intersectMaskCenters(masks[j], centers[i])
                 if a and b:
-                    centers[i] = torch.cat(centers[i],centers[j].clone(),dim=0)
+                    centers[i] = torch.cat(centers[i], centers[j].clone(), dim=0)
                     del centers[j]
                     masks[i] = torch.clamp(masks[i] + masks[j], 0, 1)
                     del masks[j]
@@ -95,95 +76,79 @@ class SAMwithoutResizing:
 
         return masks, centers
 
-    def mergingMasks(self, masks):
+    def mergingMasks256(self, masks):
         assert masks.shape[0] == self.magrille.shape[0]
         tmp = [self.magrille[i].unsqueeze(0) for i in range(masks.shape[0])]
         return self.mergingMasks_(masks, tmp)
-    
-    def applySAM256(self,x):
+
+    def applySAM256(self, x):
+        assert x.shape == (3, 256, 256)
         masks = self.rawSAM(x)
-        _,centers = self.mergingMasks(masks)
+        masks, centers = self.mergingMasks256(masks)
+
+        issues = (masks.sum(0) != 1).float()
+
+        P = torch.nonzero(issues)
         I = []
         for i in range(masks.shape[0]):
-            I.append(torch.ones(centers[i].shape[0])*i)
-        I = torch.cat(I,dim=0)
-        centers = torch.cat(centers,dim=0)
-        J = nearestCloud(self.allpixels256,centers,I)
-        out = torch.zeros(256,256)
-        out[self.allpixels256[:,0],self.allpixels256[:,1]]=J
-        return out
+            I.append(torch.ones(centers[i].shape[0]) * i)
+        I = torch.cat(I, dim=0)
+        centers = torch.cat(centers, dim=0)
+        J = nearestCloud(P, centers, I)
 
-    def applySAMmultiple(self, x):
-        b, _, h, w = x.shape
-        W, H = (w // 256) * 256 + 256, (h // 256) * 256 + 256
+        partition = torch.zeros(256, 256)
+        partition[P[:, 0], P[:, 1]] = J
+        masks = masks * torch.arange(masks.shape[0]).unsqueeze(-1).unsqueeze(-1)
+        partition += masks.sum(0) * (issues == 0).float()
+        return partition
+
+    def applySAM256multiple(self, x):
+        partition = [self.applySAM256(x[i]) for i in range(x.shape[0])]
+        return torch.stack(partition, dim=0)
+
+    def applySAM(self, x):
+        _, h, w = x.shape
+        W, H = (w // 192) * 192 + 256, (h // 192) * 192 + 256
 
         x = torch.nn.functional.interpolate(x, size=(H, W), mode="bilinear")
 
-        masks = torch.zeros(b, 1, w, h).cuda()
-        nbM = torch.zeros(b).cuda()
-        for i in range(b):
-            nbM[i], masks[i] = self.applySAM(x[i])
-        masks = torch.nn.functional.interpolate(masks, size=(h, w), mode="nearest")
-
-        colorM = torch.zeros(b, 3, w, h).cuda()
-        for i in range(b):
-            for j in range(nbM[i]):
-                colorM[i] += self.palette[j] * (masks[i] == j).float()
-        return nbM, masks, colorM
-
-    def applySAM(self, x_):
-        _, H, W = x_.shape
-        largeMasks, largegrid, largeMerged = [], [], []
-        for w in range(0, W - 256, 256):
-            for h in range(0, H - 256, 256):
-                masks, grid, merged = self.basicSAM(x[:, h : h + 256, w : w + 256])
+        largeMasks, largegrid = [], []
+        for w in range(0, W - 256, 192):
+            for h in range(0, H - 256, 192):
+                masks = self.rawSAM(x[:, h : h + 256, w : w + 256])
+                masks, centers = self.mergingMasks256(masks)
+                for i in range(masks.shape[0]):
+                    centers[i][0] += h
+                    centers[i][1] += w
                 tmp = torch.zeros(masks.shape[0], H, W).cuda()
                 tmp[:, h : h + 256, w : w + 256] = masks
-                largeMasks.append(tmp.clone())
-                tmp = grid.clone()
-                tmp[:, 0] += h
-                tmp[:, 1] += w
-                largegrid.append(grid)
+                largegrid.extends(centers)
+                largeMasks.appedn(tmp)
+        largeMasks = torch.cat(largeMasks, dim=0)
 
-        # NMS
-        tmp = [(masks[i].sum(), i) for i in range(masks.shape[0])]
-        tmp = sorted(tmp)
-        remove = []
-        for i in range(len(tmp)):
-            if tmp[i][0] == 0:
-                remove.append(i)
-                break
-            for j in range(i, len(tmp)):
-                if tmp[i][0] <= tmp[j][0] * 0.7:
-                    break
-                else:
-                    I = masks[tmp[i][1]] * masks[tmp[j][1]]
-                    U = masks[tmp[i][1]] + masks[tmp[j][1]] - I
-                    IoU = I.sum() / (U.sum() + 0.1)
-                    if IoU > 0.7:
-                        remove.append(i)
-                        break
-        remove = set(remove)
-        masks = masks[[i for i in range(len(tmp)) if i not in remove]]
+        masks, centers = self.mergingMasks_(masks, largegrid)
 
-        size_ = (x_.shape[1], x_.shape[2])
-        if masks.shape[0] == 0:
-            if debug:
-                return torch.zeros(x_.shape).cuda()
-            else:
-                return torch.zeros(size_).cuda(), torch.zeros(x_.shape).cuda()
+        issues = (masks.sum(0) != 1).float()
 
-        # border and pseudo color
-        border = self.getborder(masks).unsqueeze(0).unsqueeze(0)
-        pseudocolor = self.getpseudocolor(masks).unsqueeze(0)
+        P = torch.nonzero(issues)
+        I = []
+        for i in range(masks.shape[0]):
+            I.append(torch.ones(centers[i].shape[0]) * i)
+        I = torch.cat(I, dim=0)
+        centers = torch.cat(centers, dim=0)
+        J = nearestCloud(P, centers, I)
 
-        border = torch.nn.functional.interpolate(border, size=size_, mode="bilinear")
-        pseudocolor = torch.nn.functional.interpolate(pseudocolor, size=size_)
-        if debug:
-            masks = torch.nn.functional.interpolate(masks.unsqueeze(0), size=size_)
-            return masks[0]
-        else:
-            return border[0][0], pseudocolor[0]
+        partition = torch.zeros(H, W).cuda()
+        partition[P[:, 0], P[:, 1]] = J
+        masks = masks * torch.arange(masks.shape[0]).unsqueeze(-1).unsqueeze(-1)
+        partition += masks.sum(0) * (issues == 0).float()
+
+        _, h, w = x.shape
+        return torch.nn.functional.interpolate(partition, size=(h, w), mode="bilinear")
+
+    def applySAMmultiple(self, x):
+        partition = [self.applySAM(x[i]) for i in range(x.shape[0])]
+        return torch.stack(partition, dim=0)
 
     def getborder(self, masks):
         tmp = torch.nn.functional.max_pool2d(masks, kernel_size=3, stride=1, padding=1)
@@ -191,25 +156,32 @@ class SAMwithoutResizing:
         tmp, _ = tmp.max(0)
         return tmp
 
-    def getpseudocolor(self, masks):
-        out = torch.zeros(3, 256, 256).cuda()
-        for i in range(masks.shape[0]):
-            tmp = torch.zeros(3, 256, 256).cuda()
-            tmp[0] = self.palette[i % 9][0] * masks[i]
-            tmp[1] = self.palette[i % 9][1] * masks[i]
-            tmp[2] = self.palette[i % 9][2] * masks[i]
-            out = torch.max(out, tmp)
-        return out
-
 
 if __name__ == "__main__":
-    sam = SAMasInput()
+    sam = SAMwithoutResizing()
 
     import PIL
     from PIL import Image
     import numpy
     import rasterio
     import os
+
+    print("TODO")
+
+    palette = torch.Tensor(
+        [
+            [255.0, 0.0, 0.0],
+            [0.0, 255.0, 0.0],
+            [0.0, 0.0, 255.0],
+            [109.0, 98.0, 188.0],
+            [230.0, 251.0, 148.0],
+            [5.0, 18.0, 230.0],
+            [163.0, 38.0, 214.0],
+            [173.0, 142.0, 45.0],
+            [95.0, 19.0, 120.0],
+            [0.0, 0.0, 0.0],
+        ]
+    ).cuda()
 
     os.system("rm -r build")
     os.system("mkdir build")
