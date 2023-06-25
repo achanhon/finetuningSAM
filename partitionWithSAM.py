@@ -43,6 +43,8 @@ class PartitionSAM:
             self.magrille[i][0][0] = row
             self.magrille[i][0][1] = col
             self.magrilleL[i][0] = i
+        self.magrille = self.magrille.long()
+        self.magrilleL = self.magrilleL.long()
 
     def rawSAM(self, x_):
         assert x_.shape == (3, 256, 256)
@@ -78,10 +80,11 @@ class PartitionSAM:
                 a = self.intersectMaskCenters(masks[i], centers[j])
                 b = self.intersectMaskCenters(masks[j], centers[i])
                 if a and b:
-                    centers[i] = torch.cat(centers[i], centers[j], dim=0)
+                    centers[i] = torch.cat([centers[i], centers[j]], dim=0)
                     del centers[j]
                     masks[i] = torch.clamp(masks[i] + masks[j], 0, 1)
-                    del masks[j]
+                    I = [k for k in range(masks.shape[0]) if k != j]
+                    masks = masks[I]
                     return self.mergingMasks_(masks, centers)
 
         return masks, centers
@@ -92,8 +95,11 @@ class PartitionSAM:
         return self.mergingMasks_(masks, tmp)
 
     def applySAM(self, x_):
-        x = torch.nn.functional.interpolate(x_, size=(256, 256), mode="bilinear")
-        masks = self.rawSAM(x)
+        _, h, w = x_.shape
+        x = torch.nn.functional.interpolate(
+            x_.unsqueeze(0), size=(256, 256), mode="bilinear"
+        )
+        masks = self.rawSAM(x[0])
         masks, centers = self.mergingMasks256(masks)
 
         issues, ok = (masks.sum(0) != 1).float(), (masks.sum(0) == 1).float()
@@ -111,8 +117,11 @@ class PartitionSAM:
         J = nearestCloud(P, centers, I)
         partition[P[:, 0], P[:, 1]] = J
 
-        _, h, w = x_.shape
-        return torch.nn.functional.interpolate(partition, size=(h, w), mode="nearest")
+        partition = partition.unsqueeze(0).unsqueeze(0)
+        partition = torch.nn.functional.interpolate(
+            partition, size=(h, w), mode="nearest"
+        )
+        return partition[0][0]
 
     def forward(self, x):
         with torch.no_grad():
