@@ -69,10 +69,10 @@ class PartitionSAM:
 
     def intersectMaskCenters(self, mask, centers):
         m = mask[centers[:, 0], centers[:, 1]].sum()
-        if centers.shape[0] <= 2:
-            return m >= 1
+        if centers.shape[0] <= 3:
+            return m >= 2
         else:
-            return m >= 0.6 * centers.shape[1]
+            return m >= 0.7 * centers.shape[1]
 
     def mergingMasks_(self, masks, centers):
         for i in range(masks.shape[0]):
@@ -103,6 +103,7 @@ class PartitionSAM:
         masks, centers = self.mergingMasks256(masks)
 
         issues, ok = (masks.sum(0) != 1).float(), (masks.sum(0) == 1).float()
+        print(issues.sum(), ok.sum())
 
         for i in range(masks.shape[0]):
             masks[i] *= i
@@ -169,6 +170,9 @@ if __name__ == "__main__":
     torchvision.utils.save_image(partition / partition.flatten().max(), "build/p.png")
     torchvision.utils.save_image(getborder(partition), "build/b.png")
 
-    pseudocolor = (palette[partition.long()]).permute(2, 0, 1)
-    print(pseudocolor.shape)
+    partition = partition.long()
+    pseudocolor = torch.zeros(x.shape)
+    for row in range(partition.shape[0]):
+        for col in range(partition.shape[1]):
+            pseudocolor[:, row, col] = palette[partition[row][col] % 9]
     torchvision.utils.save_image(pseudocolor / 255, "build/c.png")
