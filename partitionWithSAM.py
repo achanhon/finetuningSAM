@@ -69,10 +69,10 @@ class PartitionSAM:
 
     def intersectMaskCenters(self, mask, centers):
         m = mask[centers[:, 0], centers[:, 1]].sum()
-        if centers.shape[0] <= 3:
-            return m >= 2
+        if centers.shape[0] <= 2:
+            return m >= 1
         else:
-            return m >= 0.7 * centers.shape[1]
+            return m >= 0.5 * centers.shape[0]
 
     def mergingMasks_(self, masks, centers):
         for i in range(masks.shape[0]):
