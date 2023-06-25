@@ -57,10 +57,10 @@ class SAMwithoutResizing:
             ]
         ).cuda()
 
-    def rawSAM(self,x):
-        assert x.shape == (3, 256, 256)
+    def rawSAM(self,x_):
+        assert x_.shape == (3, 256, 256)
         x = {}
-        x["image"] = x_
+        x["image"] = x_.cuda()
         x["original_size"] = (256, 256)
         x["point_coords"] = self.magrille
         x["point_labels"] = self.magrilleL
@@ -101,21 +101,17 @@ class SAMwithoutResizing:
         return self.mergingMasks_(masks, tmp)
     
     def applySAM256(self,x):
-        if len(x.shape==3):
-            masks = self.rawSAM(x)
-            _,centers = self.mergingMasks(masks)
-            I = []
-            for i in range(masks.shape[0]):
-                I.append(torch.ones(centers[i].shape[0])*i)
-            I = torch.cat(I,dim=0)
-            centers = torch.cat(centers,dim=0)
-            J = nearestCloud(self.allpixels256,centers,I)
-            out = torch.zeros(256,256)
-            out[self.allpixels256[:,0],self.allpixels256[:,1]]=J
-            return out
-        else:
-            
-
+        masks = self.rawSAM(x)
+        _,centers = self.mergingMasks(masks)
+        I = []
+        for i in range(masks.shape[0]):
+            I.append(torch.ones(centers[i].shape[0])*i)
+        I = torch.cat(I,dim=0)
+        centers = torch.cat(centers,dim=0)
+        J = nearestCloud(self.allpixels256,centers,I)
+        out = torch.zeros(256,256)
+        out[self.allpixels256[:,0],self.allpixels256[:,1]]=J
+        return out
 
     def applySAMmultiple(self, x):
         b, _, h, w = x.shape
