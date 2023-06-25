@@ -3,23 +3,23 @@ import segment_anything
 
 
 def getborder(partition):
-    pMAX = torch.nn.functional.max_pool2d(partition, kernel_size=3, stride=1, padding=1)
-    x = -partition - 1
+    x = partition.unsqueeze(0)
+    pMAX = torch.nn.functional.max_pool2d(x, kernel_size=3, stride=1, padding=1)
+    x = -x - 1
     x = torch.nn.functional.max_pool2d(x, kernel_size=3, stride=1, padding=1)
     pMIN = -x - 1
-    return (pMAX == pMIN).float()
+    return (pMAX[0] == pMIN[0]).float()
 
 
 def computeDistance(P, Q):
     # |P|x2 and |Q|x2
-    P, Q = P.unsqueeze(0), Q.unsqueeze(1)  # 1x|P|x2 and |Q|x1x2
+    P, Q = P.unsqueeze(1), Q.unsqueeze(0)  # 1x|P|x2 and |Q|x1x2
     D = (P - Q) ** 2  # |P|x|Q|x2
     return D.sum(2)  # |P|x|Q|
 
 
 def nearestCloud(P, Q, I):
-    print(P.shape,Q.shape)
-    D = computeDistance(P,Q)
+    D = computeDistance(P, Q)
     _, D = D.min(1)
     return I[D]
 
@@ -75,7 +75,6 @@ class PartitionSAM:
             return m >= 0.6 * centers.shape[1]
 
     def mergingMasks_(self, masks, centers):
-        print("nb masks", masks.shape[0])
         for i in range(masks.shape[0]):
             for j in range(i + 1, masks.shape[0]):
                 a = self.intersectMaskCenters(masks[i], centers[j])
@@ -113,7 +112,7 @@ class PartitionSAM:
         I = []
         for i in range(masks.shape[0]):
             I.append(torch.ones(centers[i].shape[0]) * i)
-        I = torch.cat(I, dim=0)
+        I = torch.cat(I, dim=0).cuda()
         centers = torch.cat(centers, dim=0)
         J = nearestCloud(P, centers, I)
         partition[P[:, 0], P[:, 1]] = J
@@ -170,5 +169,6 @@ if __name__ == "__main__":
     torchvision.utils.save_image(partition / partition.flatten().max(), "build/p.png")
     torchvision.utils.save_image(getborder(partition), "build/b.png")
 
-    pseudocolor = palette[partition.long()]
-    torchvision.utils.save_image(getborder(partition), "build/c.png")
+    pseudocolor = (palette[partition.long()]).permute(2, 0, 1)
+    print(pseudocolor.shape)
+    torchvision.utils.save_image(pseudocolor / 255, "build/c.png")
