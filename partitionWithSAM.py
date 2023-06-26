@@ -55,6 +55,10 @@ class PartitionSAM:
         x["point_labels"] = self.magrilleL
 
         with torch.no_grad():
+            # tmp = self.sam([x], False)[0]
+            # for key in tmp:
+            #    print(key)
+            # quit()
             masks = self.sam([x], False)[0]["masks"]
 
         # take the largest
