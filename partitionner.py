@@ -5,9 +5,7 @@ import segment_anything
 def getborder(partition):
     x = partition.unsqueeze(0)
     pMAX = torch.nn.functional.max_pool2d(x, kernel_size=3, stride=1, padding=1)
-    x = -x - 1
-    x = torch.nn.functional.max_pool2d(x, kernel_size=3, stride=1, padding=1)
-    pMIN = -x - 1
+    pMIN = -torch.nn.functional.max_pool2d(-x, kernel_size=3, stride=1, padding=1)
     return (pMAX[0] == pMIN[0]).float()
 
 
@@ -19,8 +17,8 @@ class PartitionWithSAM:
         self.sam.eval()
 
         tmp = []
-        for row in range(8, 248, 17):
-            for col in range(8, 248, 17):
+        for row in range(6, 248, 13):
+            for col in range(6, 248, 13):
                 tmp.append((row, col))
 
         self.magrille = torch.zeros(len(tmp), 1, 2).cuda()
@@ -51,6 +49,10 @@ class PartitionWithSAM:
         masks = 1 - torch.nn.functional.max_pool2d(
             1 - masks, kernel_size=3, stride=1, padding=1
         )
+
+        # remove empty
+        I = [i for i in range(masks.shape[0]) if masks[i].sum() >= 10]
+        masks = masks[I]
         return masks
 
     def mergingMasks_(self, masks):
@@ -59,15 +61,16 @@ class PartitionWithSAM:
                 I = masks[i] * masks[j]
                 U = masks[i] + masks[j] - I
                 I, U = I.sum(), U.sum()
-                if I / (U + 1) > 0.8:
-                    masks[i] = torch.clamp(masks[i] + masks[j], 0, 1)
+                if I / (U + 1) > 0.5:
+                    # remove j
                     I = [k for k in range(masks.shape[0]) if k != j]
-                    masks = masks[I]
+                    masks[i] = torch.clamp(masks[i] + masks[j], 0, 1)
+                    masks = masks[I].clone()
                     return self.mergingMasks_(masks)
 
         return masks
 
-    def mergingMasks256(self, masks):
+    def mergingMasks(self, masks):
         I = [(masks[i].sum(), i) for i in range(masks.shape[0])]
         I = sorted(I)
         I = [i for _, i in I]
@@ -80,19 +83,15 @@ class PartitionWithSAM:
             x_.unsqueeze(0), size=(256, 256), mode="bilinear"
         )
         masks = self.rawSAM(x[0])
-        print(masks.shape)
-        masks = self.mergingMasks256(masks)
-        print(masks.shape)
+        masks = self.mergingMasks(masks)
 
         partition = masks[0]
         for i in range(1, masks.shape[0]):
-            print((partition==0).float().sum())
             partition += (partition == 0).float() * masks[i] * (i + 1)
 
         for i in range(10):
             if (partition == 0).float().sum() == 0:
                 break
-            print((partition==0).float().sum())
             tmp = torch.nn.functional.max_pool2d(
                 partition.unsqueeze(0), kernel_size=3, padding=1, stride=1
             )
