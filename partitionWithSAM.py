@@ -161,7 +161,7 @@ if __name__ == "__main__":
         g = numpy.clip(src.read(2) * 2, 0, 1)
         b = numpy.clip(src.read(3) * 2, 0, 1)
         x = numpy.stack([r, g, b], axis=0) * 255
-        x = torch.Tensor(x).cuda()
+        x = torch.Tensor(x)[:, 256 : 256 + 1024, 256 : 256 + 1024].cuda()
 
     torchvision.utils.save_image(x / 255, "build/x.png")
 
