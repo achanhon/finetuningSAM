@@ -17,7 +17,7 @@ class IncrementalSAM:
         x["original_size"] = (256, 256)
         x["point_coords"] = torch.Tensor(p).unsqueeze(0).unsqueeze(0).cuda()
         print(x["point_coords"].shape)
-        x["point_labels"] = torch.ones(1).cuda()
+        x["point_labels"] = torch.ones(1, 1).cuda()
 
         with torch.no_grad():
             mask = self.sam([x], False)[0]["masks"][0]
