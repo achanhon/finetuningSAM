@@ -15,7 +15,7 @@ class IncrementalSAM:
         x = {}
         x["image"] = x_.cuda()
         x["original_size"] = (256, 256)
-        x["point_coords"] = torch.Tensor(p).unsqueeze(0).cuda()
+        x["point_coords"] = torch.Tensor(p).unsqueeze(0).unsqueeze(0).cuda()
         print(x["point_coords"].shape)
         x["point_labels"] = torch.ones(1).cuda()
 
