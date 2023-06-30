@@ -96,21 +96,19 @@ if __name__ == "__main__":
     path = "/d/achanhon/sample_sam_test/"
 
     image = PIL.Image.open(path + "image.png").convert("RGB").copy()
-    mask = PIL.Image.open(path + "mask.png").convert("L").copy()
-    image, mask = numpy.asarray(image), numpy.asarray(mask)
+    mask = numpy.asarray(PIL.Image.open(path + "mask.png").convert("L").copy())
+    image = numpy.transpose(numpy.asarray(image), axes=(2, 0, 1))
     image, mask = torch.Tensor(image), (torch.Tensor(mask) != 255).float()
 
     torchvision.utils.save_image(image / 255, "build/x.png")
-    torchvision.utils.save_image(mask / 255, "build/m.png")
-    quit()
+    torchvision.utils.save_image(mask, "build/m.png")
 
-    partition = sam.forward(x)
+    partition = sam.sliceMask(image, mask)
 
     torchvision.utils.save_image(partition / partition.flatten().max(), "build/p.png")
-    torchvision.utils.save_image(getborder(partition), "build/b.png")
 
     partition = partition.long()
-    pseudocolor = torch.zeros(x.shape)
+    pseudocolor = torch.zeros(image.shape)
     for row in range(partition.shape[0]):
         for col in range(partition.shape[1]):
             pseudocolor[:, row, col] = palette[partition[row][col] % 9]
