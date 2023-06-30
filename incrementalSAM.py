@@ -3,6 +3,19 @@ import segment_anything
 import skimage
 
 
+def centerOfMask(y_):
+    y = (y_ != 1).unsqueeze(0).float()
+    assert (y == 0).float().sum() > 0
+    ybefore = y.clone()
+    for i in range(300):
+        y = torch.nn.functional.max_pool2d(y, kernel_size=3, padding=1, stride=1)
+        if (y == 0).float().sum() == 0:
+            break
+        else:
+            ybefore = y.clone()
+    return torch.nonzero((ybefore[0] == 0).float())[0]
+
+
 class IncrementalSAM:
     def __init__(self):
         self.path = "model/sam_vit_b_01ec64.pth"
@@ -32,38 +45,41 @@ class IncrementalSAM:
         return mask[0]
 
     def sliceMask_(self, x, todo):
-        connectedComponent = skimage.measure.label(todo.cpu().numpy())
-        blobs = skimage.measure.regionprops(connectedComponent)
-        if len(blobs) == 0:
-            return None
-        tmp = [(-blobs[i].area, i) for i in range(len(blobs))]
-        tmp = sorted(tmp)
-        tmp = blobs[tmp[0][1]]
-        print("blob size", tmp.area)
-        if tmp.area < 10:
-            return None
-
-        p = tmp.centroid
+        if False:
+            connectedComponent = skimage.measure.label(todo.cpu().numpy())
+            blobs = skimage.measure.regionprops(connectedComponent)
+            if len(blobs) == 0:
+                return None
+            tmp = [(-blobs[i].area, i) for i in range(len(blobs))]
+            tmp = sorted(tmp)
+            tmp = blobs[tmp[0][1]]
+            print("blob size", tmp.area)
+            if tmp.area < 10:
+                return None
+            p = tmp.centroid
+        p = centerOfMask(todo)
+        print(p)
         mask = self.samroutine(x, [p[1], p[0]])
         print("mask size", mask.sum())
         mask = mask * todo
         print("mask size after removing bad part", mask.sum())
-        if mask.sum() == 0:
+        if mask.sum() < 10:
             return None
         else:
             return mask
 
     def sliceMask(self, x, y):
-        partition = torch.zeros(y.shape).cuda()
-        done = torch.zeros(y.shape).cuda()
+        with torch.no_grad():
+            partition = torch.zeros(y.shape).cuda()
+            done = torch.zeros(y.shape).cuda()
 
-        for i in range(1, 100):
-            blob = self.sliceMask_(x * (1 - done), y * (1 - done))
-            if blob is None:
-                return partition
-            partition = partition + blob * i
-            done = done + (blob > 0).float()
-        return partition
+            for i in range(1, 100):
+                blob = self.sliceMask_(x * (1 - done), y * (1 - done))
+                if blob is None:
+                    return partition
+                partition = partition + blob * i
+                done = done + (blob > 0).float()
+            return partition
 
 
 if __name__ == "__main__":
