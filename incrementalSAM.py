@@ -16,6 +16,7 @@ class IncrementalSAM:
         x["image"] = x_.cuda()
         x["original_size"] = (256, 256)
         x["point_coords"] = torch.Tensor(p).unsqueeze(0).cuda()
+        print(x["point_coords"])
         x["point_labels"] = torch.ones(1).cuda()
 
         with torch.no_grad():
@@ -26,22 +27,19 @@ class IncrementalSAM:
         mask = (mask > 0).float()
 
         # erode
-        mask = (
-            1
-            - torch.nn.functional.max_pool2d(
-                1 - mask.unsqueeze(0), kernel_size=3, stride=1, padding=1
-            )[0]
+        mask = 1 - torch.nn.functional.max_pool2d(
+            1 - mask.unsqueeze(0), kernel_size=3, stride=1, padding=1
         )
-        return mask
+        return mask[0]
 
     def sliceMask_(self, x, todo):
         connectedComponent = skimage.measure.label(todo.cpu().numpy())
         blobs = skimage.measure.regionprops(connectedComponent)
         if len(blobs) == 0:
             return None
-        tmp = [(region.area, region) for region in blobs]
+        tmp = [(-blobs[i].area, i) for i in range(len(blobs))]
         tmp = sorted(tmp)
-        tmp = tmp[0][1]
+        tmp = blobs[tmp[0][1]]
         if tmp.area < 10:
             return None
 
@@ -58,7 +56,7 @@ class IncrementalSAM:
         done = torch.zeros(y.shape).cuda()
 
         for i in range(1, 100):
-            blob = self.sliceMask_(x, y * (1 - done))
+            blob = self.sliceMask_(x * (1 - done), y * (1 - done))
             if blob is None:
                 return partition
             partition = partition + blob * i
@@ -96,14 +94,15 @@ if __name__ == "__main__":
     path = "/d/achanhon/sample_sam_test/"
 
     image = PIL.Image.open(path + "image.png").convert("RGB").copy()
-    mask = numpy.asarray(PIL.Image.open(path + "mask.png").convert("L").copy())
-    image = numpy.transpose(numpy.asarray(image), axes=(2, 0, 1))
+    image = numpy.transpose(numpy.asarray(image.resize((256, 256))), axes=(2, 0, 1))
+    mask = PIL.Image.open(path + "mask.png").convert("L").copy()
+    mask = numpy.asarray(mask.resize((256, 256)))
     image, mask = torch.Tensor(image), (torch.Tensor(mask) != 255).float()
 
     torchvision.utils.save_image(image / 255, "build/x.png")
     torchvision.utils.save_image(mask, "build/m.png")
 
-    partition = sam.sliceMask(image, mask)
+    partition = sam.sliceMask(image.cuda(), mask.cuda())
 
     torchvision.utils.save_image(partition / partition.flatten().max(), "build/p.png")
 
