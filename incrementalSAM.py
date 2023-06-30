@@ -16,7 +16,6 @@ class IncrementalSAM:
         x["image"] = x_.cuda()
         x["original_size"] = (256, 256)
         x["point_coords"] = torch.Tensor(p).unsqueeze(0).unsqueeze(0).cuda()
-        print(x["point_coords"].shape)
         x["point_labels"] = torch.ones(1, 1).cuda()
 
         with torch.no_grad():
@@ -40,12 +39,15 @@ class IncrementalSAM:
         tmp = [(-blobs[i].area, i) for i in range(len(blobs))]
         tmp = sorted(tmp)
         tmp = blobs[tmp[0][1]]
+        print("blob size", tmp.area)
         if tmp.area < 10:
             return None
 
         p = tmp.centroid
-        mask = self.samroutine(x, p)
+        mask = self.samroutine(x, [p[1], p[0]])
+        print("mask size", mask.sum())
         mask = mask * todo
+        print("mask size after removing bad part", mask.sum())
         if mask.sum() == 0:
             return None
         else:
@@ -76,6 +78,7 @@ if __name__ == "__main__":
 
     palette = torch.Tensor(
         [
+            [0.0, 0.0, 0.0],
             [255.0, 0.0, 0.0],
             [0.0, 255.0, 0.0],
             [0.0, 0.0, 255.0],
@@ -85,7 +88,6 @@ if __name__ == "__main__":
             [163.0, 38.0, 214.0],
             [173.0, 142.0, 45.0],
             [95.0, 19.0, 120.0],
-            [0.0, 0.0, 0.0],
         ]
     ).cuda()
 
