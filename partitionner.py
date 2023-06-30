@@ -17,8 +17,8 @@ class PartitionWithSAM:
         self.sam.eval()
 
         tmp = []
-        for row in range(6, 248, 13):
-            for col in range(6, 248, 13):
+        for row in range(8, 248, 17):
+            for col in range(8, 248, 17):
                 tmp.append((row, col))
 
         self.magrille = torch.zeros(len(tmp), 1, 2).cuda()
@@ -140,7 +140,7 @@ if __name__ == "__main__":
         g = numpy.clip(src.read(2) * 2, 0, 1)
         b = numpy.clip(src.read(3) * 2, 0, 1)
         x = numpy.stack([r, g, b], axis=0) * 255
-        x = torch.Tensor(x)[:, 256 : 256 + 1024, 256 : 256 + 1024].cuda()
+        x = torch.Tensor(x)[:, 1024 - 256 : 256 + 1024, 1024 - 256 : 256 + 1024].cuda()
 
     torchvision.utils.save_image(x / 255, "build/x.png")
 
