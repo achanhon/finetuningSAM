@@ -119,9 +119,9 @@ if __name__ == "__main__":
         pixel_x = int((x - transform[2]) / transform[0])
         pixel_y = int((y - transform[5]) / transform[4])
 
-        r = src.read(1)[pixel_x - 128 : pixel_x + 128, pixel_y - 128 : pixel_y + 128]
-        g = src.read(2)[pixel_x - 128 : pixel_x + 128, pixel_y - 128 : pixel_y + 128]
-        b = src.read(3)[pixel_x - 128 : pixel_x + 128, pixel_y - 128 : pixel_y + 128]
+        r = src.read(1)[pixel_y - 128 : pixel_y + 128, pixel_x - 128 : pixel_x + 128]
+        g = src.read(2)[pixel_y - 128 : pixel_y + 128, pixel_x - 128 : pixel_x + 128]
+        b = src.read(3)[pixel_y - 128 : pixel_y + 128, pixel_x - 128 : pixel_x + 128]
         x = numpy.clip(numpy.stack([r, g, b], axis=0) * 2, 0, 1)
         x = torch.Tensor(x)
 
