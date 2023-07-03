@@ -129,6 +129,24 @@ if __name__ == "__main__":
         torchvision.utils.save_image(x, "build/x.png")
         x = x * 255
 
+    with rasterio.open(path + m) as src:
+        r = src.read(1)
+        print(r.shape)
+        r = r[pixel_y - 128 : pixel_y + 128, pixel_x - 128 : pixel_x + 128]
+        m = (torch.Tensor(r) > 0).float()
+        torchvision.utils.save_image(x, "build/m.png")
+
+    partition = sam.sliceMask(x.cuda(), m.cuda())
+
+    torchvision.utils.save_image(partition / partition.flatten().max(), "build/p.png")
+
+    partition = partition.long()
+    pseudocolor = torch.zeros(x.shape)
+    for row in range(partition.shape[0]):
+        for col in range(partition.shape[1]):
+            pseudocolor[:, row, col] = palette[partition[row][col] % 9]
+    torchvision.utils.save_image(pseudocolor / 255, "build/c.png")
+
     quit()
     path = "/d/achanhon/sample_sam_test/"
 
