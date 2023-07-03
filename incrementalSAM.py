@@ -119,13 +119,15 @@ if __name__ == "__main__":
         pixel_x = int((x - transform[2]) / transform[0])
         pixel_y = int((y - transform[5]) / transform[4])
 
-        r = numpy.clip(src.read(1) * 2, 0, 1)
-        print(r.shape, pixel_x, pixel_y)
+        r = src.read(1)[pixel_x - 128 : pixel_x + 128, pixel_y - 128 : pixel_y + 128]
+        g = src.read(2)[pixel_x - 128 : pixel_x + 128, pixel_y - 128 : pixel_y + 128]
+        b = src.read(3)[pixel_x - 128 : pixel_x + 128, pixel_y - 128 : pixel_y + 128]
+        x = numpy.clip(numpy.stack([r, g, b], axis=0) * 2, 0, 1)
+        x = torch.Tensor(x)
 
-        quit()
-        g = numpy.clip(src.read(2), 0, 1)
-        b = numpy.clip(src.read(3) * 2, 0, 1)
-        x = numpy.stack([r, g, b], axis=0) * 255
+        print(r.shape, pixel_x, pixel_y)
+        torchvision.utils.save_image(x, "build/x.png")
+        x = x * 255
 
     quit()
     path = "/d/achanhon/sample_sam_test/"
