@@ -109,6 +109,25 @@ if __name__ == "__main__":
 
     os.system("rm -r build")
     os.system("mkdir build")
+    path = "/d/achanhon/testAI4GEOsam/"
+    x = "NEW-YORK_20180524_T_TOA_reproj-EPSG:32618_cog.tif"
+    m = "NEW-YORK_20180524_T_8192_7680_512_256_nCOS1_building_labels.tif"
+
+    with rasterio.open(path + x) as src:
+        transform = src.transform
+        x, y = (584385.4, 4508194.2)
+        pixel_x = int((x - transform[2]) / transform[0])
+        pixel_y = int((y - transform[5]) / transform[4])
+
+        r = numpy.clip(src.read(1) * 2, 0, 1)
+        print(r.shape, pixel_x, pixel_y)
+
+        quit()
+        g = numpy.clip(src.read(2), 0, 1)
+        b = numpy.clip(src.read(3) * 2, 0, 1)
+        x = numpy.stack([r, g, b], axis=0) * 255
+
+    quit()
     path = "/d/achanhon/sample_sam_test/"
 
     image = PIL.Image.open(path + "image.png").convert("RGB").copy()
