@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
     with rasterio.open(path + x) as src:
         transform = src.transform
-        x, y = (584385.4, 4508194.2)
+        x, y = (589113.4, 4512436.1)
         pixel_x = int((x - transform[2]) / transform[0])
         pixel_y = int((y - transform[5]) / transform[4])
 
