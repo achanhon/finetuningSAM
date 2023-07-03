@@ -1,20 +1,38 @@
 import torch
 import segment_anything
 
-print("version tenseur")
+if False:
+    print("version tenseur")
+    with torch.no_grad():
+        sam = segment_anything.sam_model_registry["vit_b"](
+            checkpoint="model/sam_vit_b_01ec64.pth"
+        )
+        sam.hackinit()
+        sam = sam.cuda()
+        sam.eval()
+
+        x = torch.rand(2, 3, 256, 256).cuda()
+        print(sam(x).shape)
+
+
+print("version originale 512")
 with torch.no_grad():
     sam = segment_anything.sam_model_registry["vit_b"](
         checkpoint="model/sam_vit_b_01ec64.pth"
     )
-    sam.hackinit()
     sam = sam.cuda()
-    sam.eval()
 
-    x = torch.rand(2, 3, 256, 256).cuda()
-    print(sam(x).shape)
+    x = {}
+    x["image"] = torch.rand(3, 512, 512).cuda()
+    x["original_size"] = (512, 512)
+    xx = {}
+    xx["image"] = torch.rand(3, 512, 512).cuda()
+    xx["original_size"] = (512, 512)
+
+    print(sam([x, xx])[0]["masks"].shape)
 
 
-print("version originale")
+print("version originale 256")
 with torch.no_grad():
     sam = segment_anything.sam_model_registry["vit_b"](
         checkpoint="model/sam_vit_b_01ec64.pth"
@@ -28,7 +46,7 @@ with torch.no_grad():
     xx["image"] = torch.rand(3, 256, 256).cuda()
     xx["original_size"] = (256, 256)
 
-    print([label for label in sam([x, xx])[0]])
+    print(sam([x, xx])[0]["masks"].shape)
 
 print("version originale avec une vrai image")
 import PIL
