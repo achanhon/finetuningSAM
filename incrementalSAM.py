@@ -119,13 +119,14 @@ if __name__ == "__main__":
         pixel_x = int((x - transform[2]) / transform[0])
         pixel_y = int((y - transform[5]) / transform[4])
 
-        r = src.read(1)[pixel_y - 128 : pixel_y + 128, pixel_x - 128 : pixel_x + 128]
+        r = src.read(1)
+        print(r.shape, pixel_x, pixel_y)
+        r = r[pixel_y - 128 : pixel_y + 128, pixel_x - 128 : pixel_x + 128]
         g = src.read(2)[pixel_y - 128 : pixel_y + 128, pixel_x - 128 : pixel_x + 128]
         b = src.read(3)[pixel_y - 128 : pixel_y + 128, pixel_x - 128 : pixel_x + 128]
         x = numpy.clip(numpy.stack([r, g, b], axis=0) * 2, 0, 1)
         x = torch.Tensor(x)
 
-        print(r.shape, pixel_x, pixel_y)
         torchvision.utils.save_image(x, "build/x.png")
         x = x * 255
 
@@ -133,8 +134,10 @@ if __name__ == "__main__":
         r = src.read(1)
         print(r.shape)
         r = r[pixel_y - 128 : pixel_y + 128, pixel_x - 128 : pixel_x + 128]
-        m = (torch.Tensor(r) > 0).float()
-        torchvision.utils.save_image(x, "build/m.png")
+        m = torch.Tensor(r)
+        print((m == 0).float().sum(), (m == 1).float().sum())
+        m = (m > 0).float()
+        torchvision.utils.save_image(m, "build/m.png")
 
     partition = sam.sliceMask(x.cuda(), m.cuda())
 
