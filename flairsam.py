@@ -167,9 +167,10 @@ if __name__ == "__main__":
     tmp = tmp[0:10]
     for i in range(10):
         x, _, y = data.get(tmp[i])
-        x = x[[3, 0, 1]]
+        # x = x[[3, 0, 1]]
+        x = x[[1, 2, 3]]
         torchvision.utils.save_image(x / 255, "build/" + str(i) + "x.png")
         torchvision.utils.save_image(y / 13, "build/" + str(i) + "y.png")
 
-        _, color = net.applySAM(x)
-        torchvision.utils.save_image(color / 255, "build/" + str(i) + "z.png")
+        # _, color = net.applySAM(x)
+        # torchvision.utils.save_image(color / 255, "build/" + str(i) + "z.png")
