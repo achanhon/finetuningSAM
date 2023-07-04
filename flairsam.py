@@ -31,7 +31,7 @@ class FLAIR2:
             b = numpy.clip(src.read(3), 0, 255)
             i = numpy.clip(src.read(4), 0, 255)
             e = numpy.clip(src.read(5), 0, 255)
-            x = numpy.stack([r, g, b, i, e], axis=0) * 255
+            x = numpy.stack([r, g, b, i, e], axis=0)
 
         sentinel = readSEN(self.root + self.paths[k]["sen"])
         assert sentinel.shape[0:2] == (10, 20)
@@ -78,8 +78,7 @@ class spatialSAM:
                 [5.0, 18.0, 230.0],
                 [163.0, 38.0, 214.0],
                 [173.0, 142.0, 45.0],
-                [95.0, 19.0, 120.0],
-                [0.0, 0.0, 0.0],
+                [95.0, 19.0, 120.0]
             ]
         ).cuda()
 
@@ -100,27 +99,21 @@ class spatialSAM:
         masks = 1 - torch.nn.functional.max_pool2d(
             1 - masks, kernel_size=3, stride=1, padding=1
         )
+        masks = masks[[i for i in range(masks.shape[0]) if masks[i].sum() > 0]]
 
         # NMS
         tmp = [(masks[i].sum(), i) for i in range(masks.shape[0])]
         tmp = sorted(tmp)
         remove = []
         for i in range(len(tmp)):
-            if tmp[i][0] == 0:
-                remove.append(i)
-                break
             if i in remove:
                 continue
-            for j in range(i, len(tmp)):
-                if tmp[i][0] <= tmp[j][0] * 0.7:
-                    break
-                else:
-                    I = masks[tmp[i][1]] * masks[tmp[j][1]]
-                    U = masks[tmp[i][1]] + masks[tmp[j][1]] - I
-                    IoU = I.sum() / (U.sum() + 0.1)
-                    if IoU > 0.7:
-                        remove.append(i)
-                        break
+            for j in range(i + 1, len(tmp)):
+                I = masks[tmp[i][1]] * masks[tmp[j][1]]
+                U = masks[tmp[i][1]] + masks[tmp[j][1]] - I
+                IoU = I.sum() / (U.sum() + 0.1)
+                if IoU > 0.7:
+                    remove.append(tmp[j][1])
         remove = set(remove)
         masks = masks[[i for i in range(len(tmp)) if i not in remove]]
 
@@ -138,11 +131,11 @@ class spatialSAM:
             )
             pseudocolor[1] = (
                 pseudocolor[1] * (1 - (partition == j).float())
-                + self.palette[j % 9][0] * (partition == j).float()
+                + self.palette[j % 9][1] * (partition == j).float()
             )
-            pseudocolor[1] = (
+            pseudocolor[2] = (
                 pseudocolor[2] * (1 - (partition == j).float())
-                + self.palette[j % 9][0] * (partition == j).float()
+                + self.palette[j % 9][2] * (partition == j).float()
             )
 
         return partition, pseudocolor
@@ -168,9 +161,9 @@ if __name__ == "__main__":
     for i in range(10):
         x, _, y = data.get(tmp[i])
         # x = x[[3, 0, 1]]
-        x = x[[1, 2, 3]]
+        x = x[0:3]
         torchvision.utils.save_image(x / 255, "build/" + str(i) + "x.png")
         torchvision.utils.save_image(y / 13, "build/" + str(i) + "y.png")
 
-        # _, color = net.applySAM(x)
-        # torchvision.utils.save_image(color / 255, "build/" + str(i) + "z.png")
+        _, color = net.applySAM(x)
+        torchvision.utils.save_image(color / 255, "build/" + str(i) + "z.png")
